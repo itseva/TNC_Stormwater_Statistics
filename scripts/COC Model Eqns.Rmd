@@ -1,10 +1,12 @@
 ---
 title: "COC Model Equations"
-output: html_document
-author: Eva Dusek Jennings
-date: April 27, 2021
-editor_options: 
-  markdown: 
+author: "Eva Dusek Jennings"
+date: "April 27, 2021"
+output:
+  word_document: default
+  html_document: default
+editor_options:
+  markdown:
     wrap: 72
 ---
 

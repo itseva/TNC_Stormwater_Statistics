@@ -14,7 +14,8 @@
 
 # Eva Dusek Jennings
 # Apr 27, 2021
-#----------------------------------------------
+
+# Load libraries ----------------------------------------------
 
 rm(list = ls(all = T))
 
@@ -40,11 +41,15 @@ library(glmmTMB)
 library(here)
 library(lattice)
 library(sp)
+library(NADA)
+library(ggplot2)
 #run script with functions specific to COC analysis
 source(here("functions", "COC analysis functions.R"))
+
 #library(gstat)
 
-#read in stormwater data with spatial predictors
+
+#read in stormwater data with spatial predictors-------------------------------
 s8 <-
   read.csv("./processed_data/s8data_with_spatial_predictors.csv")
 s8$start_date <- as.Date(s8$start_date)
@@ -55,7 +60,9 @@ s8$agency <- as.factor(s8$agency)
 s8$season <- as.factor(s8$season)
 s8$land_use <- as.factor(s8$land_use)
 
-#list of landscape predictors
+
+
+#list of landscape predictors-------------------------------
 predictors <-
   c(
     "impervious_std",
@@ -76,7 +83,26 @@ this_param_short <- "Copper"
 coc <-
   s8[which(s8$parameter == this_param), ]  #create the "coc" dataframe for this chemical of interest only
 
+#Non Detect Handing -------------------------------
 #which values are ND?  min/max detection limit?  where and when were these samples recorded?
+#look at censored statistics 
+censtats(obs = coc$conc,censored = coc$nondetect_flag) %>% kable()
+# #
+# '
+# OUTPUT FOR COPPER
+#          n      n.cen    pct.cen 
+# 514.000000   9.000000   1.750973 
+# median     mean       sd
+# K-M 9.700000 15.28840 16.69165
+# ROS 9.700000 15.29231 16.68790
+# MLE 8.700134 17.56344 30.80055`
+#   ' 
+#censored boxplot for all agencies 
+cenboxplot(obs=coc$conc, cen = coc$nondetect_flag, group = coc$agency,log = TRUE)
+
+#look at censored points
+ggplot(coc)+geom_jitter(aes(x=agency,y=conc,color=nondetect_flag))+scale_y_log10()
+
 coc.nd <-
   coc[which(coc$nondetect_flag == TRUE), ]  #9 ND results, all 0.1 and 0.5
 nrow(coc.nd)
@@ -89,16 +115,24 @@ coc.nd[, c("location_id", "start_date", "conc")]  #location, date, and detection
 #      collected at SNO_HDR are > 2.  Furthermore, other metals tested at SNO_HDR between April-Sept
 #      2009 were also ND, when no later samples were ND.  Remove these samples -- they are
 #      almost certainly anomalous, since SNO_HDR did not have any ND samples after 2009.
-
-#Note (Christian) instead of removing non-detects, the preferred method is to
-# either substutite with half the detection limit, or use a censored distribution.
-# here, I updated this code for substitution - for coc's with many non-detects, we
-# should probably use a censored method. See Helsel, D. R. (2012). Statistics for Censored Environmental Data.
+# Note from Christian - These were likely field blanks that got misclassified as samples
 
 xyplot(conc ~ start_date, data = coc[which(coc$location_id == "SNO_HDR"), ], pch =
          19)
-#coc <- coc[-(which(coc$location=="SNO_HDR" & coc$nondetect_flag==TRUE & coc$year==2009)),]
+#remove likely field blanks
+coc <- coc[-(which(coc$location=="SNO_HDR" & coc$nondetect_flag==TRUE & coc$year==2009)),]
+
+#Note (from Christian) instead of removing non-detects, the preferred method is to
+# either substutite with half the detection limit, or use a censored distribution.
+# here, I updated this code for substitution - for coc's with many non-detects, we
+# should probably use a censored method. See Helsel, D. R. (2012). Statistics for Censored Environmental Data.
 coc <- coc %>% mutate(conc, ifelse(nondetect_flag, conc * 0.5, conc))
+
+
+
+# distribution exploration ----------------------------------------------
+
+
 if (F) {
   #explore the data; look for underlying distribution
   par(mfrow = c(2, 2))
