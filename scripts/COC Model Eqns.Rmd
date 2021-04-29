@@ -1,0 +1,80 @@
+---
+title: "COC Model Equations"
+output: html_document
+author: Eva Dusek Jennings
+date: April 27, 2021
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(texreg)
+library(here)
+library(nlme)
+library(huxtable)
+library(dplyr)
+library(sjPlot)
+```
+
+# Copper Models
+
+```{r}
+
+load(here("Copper Models.RData"))
+
+Cu.coc2 <- coc2
+Cu.r1X <- r1X
+Cu.vf1X <- vf1X
+Cu.Form4 <- Form4
+Cu.Form5 <- Form5
+
+Cu.null_1 <- gls(data = Cu.coc2, result ~ 1, method = "REML") # here, we use the actual concentration, rather than the transformed one
+Cu.null_2 <- gls(data = Cu.coc2, result ~ landuse, method = "REML") #second null hypothesis, just landuse 
+Cu.random_eff <- lme(data = Cu.coc2, result ~ landuse, random = Cu.r1X, method = "REML", weights = Cu.vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+
+
+Cu.M3 <- lme(data = Cu.coc2, result ~ landuse + rain, random = Cu.r1X, method = "REML", weights = Cu.vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+Cu.M4 <- lme(data = Cu.coc2, Cu.Form4, random = Cu.r1X, method = "REML", weights = Cu.vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+Cu.M5 <- lme(data = Cu.coc2, Cu.Form5, random = Cu.r1X, method = "REML", weights = Cu.vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+
+```
+
+```{r}
+
+Cu_models <- list(
+  Cu.null_1 = Cu.null_1,
+  Cu.null_2 = Cu.null_2,
+  #Cu.random_eff = Cu.random_eff,
+  Cu.M3 = Cu.M3,
+  Cu.M4 = Cu.M4,
+  Cu.M5 = Cu.M5
+)
+
+huxtablereg(Cu_models,
+  single.row = TRUE, custom.model.names = names(Cu_models)
+) %>%
+  set_bottom_border(1, -1, 0.4) %>%
+  set_bold(1, -1, TRUE) 
+```
+
+
+
+
+```{r}
+plotreg(Cu_models, custom.title = "Regression Results, Total Copper", custom.model.names = names(Cu_models))
+```
+
+```{r}
+plot_models(Cu_models[-c(1)],m.labels = names(Cu_models[-c(1)]),legend.title = "Models", show.values = TRUE,show.intercept = TRUE
+              )
+
+```
+
+
+# Zinc Models
+# TSS Models 
+# Nitrite-Nitrate Models
+
