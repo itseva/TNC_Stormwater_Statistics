@@ -14,11 +14,9 @@ library(dplyr)
 library(stringr)
 library(RColorBrewer)
 
-register_google(key="AIzaSyCxKhn9LOp1zrq4gw_-xeJHCUtE_M0Tyfw")  
-# this is a private key!  Note: when not directly using this API, I will set the API security to only allow connection from our home's IP address.
-# in order to use the API for this script, you will have to switch permissions to allow all IP addresses to use the API.
+register_google(key="ENTER GOOGLE API KEY HERE WITHIN THE QUOTES")
+# The Google API key is a private key for Eva's Stormwater Heatmap work.  In order (for Eva) to access it, go to:
 # https://console.cloud.google.com/google/maps-apis/credentials?project=stormwater-heatmap-353621
-
 
 
 #run scripts that prepare data and contain functions required for this project
