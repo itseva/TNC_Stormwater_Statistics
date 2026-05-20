@@ -1,26 +1,44 @@
-# This generalized script assesses linear relationships between Total Kjeldahl Nitrogen and landscape predictors
-#  Because TKN has a relatively high percentage of ND data (12%), this script does not perform mixed effects
-#  models, which would be skewed by the ND data.
+# This generalized script assesses linear relationships between total zinc and landscape predictors
+# using mixed effects models
+
+# Note: This version takes the updated set of predictors (from July 7, 2021) and examines each set
+#       with the COC of interest, to see which set of predictors may be most correlated with
+#       the COC.  Based on linear fits, a select set of predictors (best_predictors) is tested in
+#       various combinations within LME models
+
+#Four models are generated for the COC of interest (note the model numbers are 1,3,4,5 (no 2)):
+#   1.) median value for all locations, irrespective of date
+#   3.) COC value based only on land use (categorical) + rain, precip, summer (as applicable)
+#   4.) COC value based on up to 3 landscape parameters NOT including land use + rain
+
 
 # Eva Dusek Jennings
-# Aug 10, 2022
+# Apr 22, 2025 -- greenery as best model; nested random effects (1|agency/location)
+#                Also - remove data points where total Zinc is > 800 ug/L.  These are high values unless 
+#                the stormwater is coming off of a zinc-plated metal roof!
+# May 1, 2025 - substitute greenery_bareEarth for greenery (bareEarth values are mostly << 1%; max is 1.25%)
+# Jun 2, 2025  -- add roads (road_density) to the analysis; NOTE: roads does NOT have a good fit to the zinc data!
+# Jun 6, 2025  -- try sqrt_paved, log_CO2_cmv_rail, sqrt_CO2_cmv_rail and 3-predictor models
+# Oct 10, 2025 -- After trying many things, Emily, Christian and I settled on not_greenBE as the sole predictor.
+#                 Using not_greenBE makes mapping easier on the SWHM, because it is a positive relationship.
+# Dec 17, 2025 -- Christian discovered that the percent trees predictor we were using has some overlap with other
+#                 predictors used to calculate greenery, resulting in greenery values > 1.  Hence a new trees predictor
+#                 was swapped in.  This one yielded a best fit model with not_greenBE + sqrt_CO2_transport
 #----------------------------------------------
 
 rm(list = ls(all = T))
-
 
 # Load libraries ----------------------------------------------
 library(effects)
 library(EnvStats)  #note the objects that are masked from other packages...
 #library(tidyverse)
-library(stringr)
 library(ggplot2)
 library(graphics)
 library(stats)
 library(nlme)
 library(grid)
 library(gridExtra)
-#library(lme4)  #for lmer models
+library(lme4)  #for lmer models
 library(lattice)
 library(gstat)  #for spatial correlation exploration
 library(sp)  #for spatial correlation exploration
@@ -35,12 +53,14 @@ library(ggplot2)
 library(knitr)
 library(texreg)
 library(huxtable)
+library(stringr)
+library(dplyr)
 #run script with functions specific to COC analysis
 source(here("..", "functions", "COC analysis functions.R"))
 source(here("..", "functions", "HighstatLibV10.R")) #Zuur library, incl panel.smooth2, VIF
 
 #toggle for whether all exploratory parts of code should be run (TRUE) or just essential parts (FALSE) 
-run_exploratory_code <- FALSE
+run_exploratory_code <- TRUE
 
 #read in stormwater data with spatial predictors-------------------------------
 s8 <- read.csv(here("..", "processed_data", "s8data_with_spatial_predictors.csv"))
@@ -60,118 +80,103 @@ predictors <- names(s8)[34:bb]  #first predictor is always column 34; get all pr
 n.preds <- length(predictors)
 
 #select the chemical of interest
-this_param <- "Total Kjeldahl Nitrogen - Water - Total"
-this_param_short <- "TKN"
+this_param <- "Zinc - Water - Total"
+this_param_short <- "Zinc"
 coc <- s8[which(s8$parameter==this_param),]  #create the "coc" dataframe for this chemical of interest only
 
+
 #Non Detect Handing -------------------------------
+
 #look at censored points
 ggplot(coc)+geom_jitter(aes(x=agency,y=conc,color=nondetect_flag))+scale_y_log10()
-ggplot(coc)+geom_jitter(aes(x=loc,y=conc,color=nondetect_flag))+scale_y_log10() +
-  labs(x="catchment location", y="TKN") #plot new values, by location
-
 
 #which values are ND?  min/max detection limit?  where and when were these samples recorded?
 coc.nd <- coc[which(coc$nondetect_flag==TRUE),]
-pct.cen <- 100*nrow(coc.nd)/nrow(coc)  #for TKN, 41 samples (9.76%) are ND.  ND level varies greatly (30 to 500)
+pct.cen <- 100*nrow(coc.nd)/nrow(coc)  #for zinc, following removal of SNO_HDR mis-labeled blanks, 0% of samples are ND's
 nrow(coc.nd)
 min(coc.nd$conc)
 max(coc.nd$conc)
 coc.nd[,c("location_id", "start_date", "conc")]  #location, date, and detection limit of ND samples
+#only SNO_HDR samples are ND - see note below...
 
-coc[which(coc$loc=="TAC_HDR" & coc$conc==255),]  #what is going on with this sample that has a strange
-#  detection limit??  I looked it up in the raw data, and it is flagged with a "result data qualifier = U"...
-#  I think this is an "estimated" value -- lets keep this value of 255 for the censored statistics.
-coc[which(coc$loc=="TAC_HDR" & coc$conc==255), "nondetect_flag"] <- FALSE 
+#NOTE: For zinc, all April-Sept 2009 samples at SNO_HDR are ND's at 1.0ppm.  All samples collected
+#      on later dates at this location are at least 10ppm.  Furthermore, other metals tested at SNO_HDR 
+#      between April-Sept 2009 were also ND, when no later samples were ND.  Remove these samples -- 
+#      they are almost certainly anomalous, since SNO_HDR did not have any ND samples after 2009.
+# Note from Christian - These were likely field blanks that got misclassified as samples
+coc <- coc[-(which(coc$location=="SNO_HDR" & coc$nondetect_flag==TRUE & coc$year==2009)),]
 
-coc[which(coc$conc==30),]
-# these two samples seem fishy -- they are both from Tacoma (TAC_COM & TAC_IND) collected on the same day (11/29/2010) as 
-# composite samples.  All other samples at these locations are much higher.  Also, the "result data qualifier" field has a "U"
-# I have kept the samples in, but we should mention our skepticism about them (or decide to remove??)
+#which points at SNO_COM are outliers? This location has lots of spread in results.
+hist(coc[which(coc$location_id=="SNO_COM"), "result"], breaks=30)  #most values are between 0 and 150.  highest (899 & 1150) are likely outliers
+#also, remove zinc values above 800 ug/L; this value is very high and may be causing our models to predict
+#  unrealistically high zinc in unmonitored locations
+coc <- coc[-(which(coc$result>800)),]
 
-#save a copy of the original concentrations
-coc$oconc <- coc$result
-
-#For comparison's sake, save a copy where ND's are substituted with half the detection limit
-coc <- coc %>%
-  mutate(result_halfND = ifelse(nondetect_flag, conc * 0.5, conc))
-
-#use Regression on Order Statistics (ros) to generate missing values (NADA package).  Go location-by-location for this part
-coc1 <- NULL  #this will be the new DF that is generated from ROS statistics
-for (i in 1:length(unique(coc$loc))) {
-  this.loc <- coc[which(coc$loc==levels(coc$loc)[i]), ]  #identify all rows for the current location
-  ros.this.loc <- ros(obs=this.loc$result, censored=this.loc$nondetect_flag)  #run the ROS statistics; get modeled values
-  df.this.loc <- as.data.frame(ros.this.loc)  #this gives all modeled data points, arranged lowest to highest
-  loc.sorted <- this.loc[order(this.loc$result), ]  #sort this.loc by result value, to match ros df
-  loc.ros <- cbind(loc.sorted, df.this.loc)  #bind modeled ros values to all columns for the current location
-  coc1 <- rbind(coc1, loc.ros)  #build the coc1 data frame, location by location
-}
-
-ggplot(coc1)+geom_jitter(aes(x=loc,y=modeled,color=nondetect_flag))+scale_y_log10()+
-  labs(x="catchment location", y="TKN") #plot new values, by location
-
-#rename
-coc <- coc1  #for ease of use down the line, change the name of coc1 to coc 
-coc$result <- coc$modeled  #for ease of use down the line, put modeled values into the "result" column
+# #Since there are no true ND's for Zinc, no need to substitute the ND's with half the detection limit
+# coc <- coc %>% 
+#   mutate(conc = ifelse(nondetect_flag, conc * 0.5, conc))
 
 # distribution exploration ----------------------------------------------
-if (run_exploratory_code ==TRUE) {
+if(run_exploratory_code==TRUE) {
   #explore the data; look for underlying distribution
   par(mfrow=c(2,2))
-  hist(coc$result, breaks=50)
-  qqnorm((coc$result), main=paste("QQ-Normal plot of", this_param_short))
-  qqline((coc$result))
-  hist(log(coc$result), breaks=50)
-  qqnorm(log(coc$result), main=paste("QQ-Normal plot of log(", this_param_short, ")", sep=""))
-  qqline(log(coc$result))
+  hist(coc$conc, breaks=50)
+  qqnorm((coc$conc), main=paste("QQ-Normal plot of", this_param_short))
+  qqline((coc$conc))
+  hist(log(coc$conc), breaks=50)
+  qqnorm(log(coc$conc), main=paste("QQ-Normal plot of log(", this_param_short, ")", sep=""))
+  qqline(log(coc$conc))
   
   #consider other distribution (log-normal and gamma).  Compare QQ plots for these distributions
   par(mfrow=c(2,2))
-  qqPlot(log(coc$result), dist="norm", estimate.params=TRUE, add.line=TRUE, main=paste("QQ log-normal plot of", this_param_short))
-  qqPlot(log(coc$result), dist="norm", param.list=list(mean=-3.3, sd=2.09), add.line=TRUE, main=paste("QQ log-normal plot of", this_param_short))
-  qqPlot(coc$result, dist="gamma", param.list=list(shape=.7, scale=1), points.col="blue",
+  qqPlot(log(coc$conc), dist="norm", estimate.params=TRUE, add.line=TRUE, main=paste("QQ log-normal plot of", this_param_short))
+  qqPlot(log(coc$conc), dist="norm", param.list=list(mean=-3.3, sd=2.09), add.line=TRUE, main=paste("QQ log-normal plot of", this_param_short))
+  qqPlot(coc$conc, dist="gamma", param.list=list(shape=.7, scale=1), points.col="blue",
          add.line=TRUE, main=paste("QQ-gamma plot of", this_param_short))
-  qqPlot(sqrt(coc$result), dist="norm", estimate.params=TRUE, add.line=TRUE, main=paste("QQ plot of sqrt-transformed", this_param_short))
+  qqPlot(sqrt(coc$conc), dist="norm", estimate.params=TRUE, add.line=TRUE, main=paste("QQ plot of sqrt-transformed", this_param_short))
   #qqPlot(1/(coc$conc), dist="norm", estimate.params=TRUE, add.line=TRUE)
 }
 
-# log-normal distribution works.  Let's ln-transform concentration data in column "result"
-coc$result <- log(coc$result)
+# best distribution is log-normal.  Ln-transform concentration data in column "result"
+coc$result <- log(coc$conc)
 
 
 #-------------------------------------------------------------------------------------------#
 #  Explore Cleveland Dotplots and Boxplots of COC data or predictors conditional on Agency  #
 #-------------------------------------------------------------------------------------------#
 
-colors_agency <- c("red", "orange", "yellow", "green", "blue", "purple")
+colors_agency <- c("#440154FF", "#453781FF", "#287C8EFF", "#29AF7FFF", "#C7E020FF")
+
+#colors_agency <- c("red", "orange", "yellow", "green", "blue", "purple")
 colors_location <- colors_agency[c(1,1,1,2,3,4,4,4,5,5,5,6,6,6)]
 
-if (run_exploratory_code ==TRUE) {
+if(run_exploratory_code==TRUE) {
   #Cleveland Dotplot - use to detect violations of homogeneity: We are looking for whether the spread of data values
   #   differs between sampling locations (or agencies).  If so, it indicates heterogeneity, and that there may be problems with violation of
   #   homogeneity in a linear regression model applied on these data.  We're also looking for outliers.
   par(mfrow=c(1,1))
-  #show dotchart for (ln-transformed) original concentrations, incl reporting limits
-  # dotchart(coc$ln.oconc, groups=coc$location_id, pch=19, col=colors_agency[as.numeric(coc$agency)],
-  #          xlab="concentration", main=paste("Cleveland Dotplot:", this_param_short))
-  #show dotchart for "result", where reporting limits were halved for non-detects
   dotchart(coc$result, groups=coc$location_id, pch=19, col=colors_agency[as.numeric(coc$agency)],
            xlab="concentration", main=paste("Cleveland Dotplot:", this_param_short))
   
   #pairs plots allow visualization of interactions between possible predictors.  Look for relationships between "result"
   #   and all of the predictor variables
-  pairs(coc %>% dplyr::select(result, predictors[1:ceiling(n.preds/3)]), 
+  pairs(coc %>% select(result, predictors[1:ceiling(n.preds/3)]), 
         lower.panel=panel.smooth2, upper.panel=panel.cor, diag.panel=panel.hist)
-  pairs(coc %>% dplyr::select(result, predictors[ (ceiling(n.preds/3)+1) : (ceiling(n.preds/3)*2) ]), 
+  pairs(coc %>% select(result, predictors[ (ceiling(n.preds/3)+1) : (ceiling(n.preds/3)*2) ]), 
         lower.panel=panel.smooth2, upper.panel=panel.cor, diag.panel=panel.hist)
-  pairs(coc %>% dplyr::select(result, predictors[ (ceiling(n.preds/3)*2+1) : n.preds]), 
+  pairs(coc %>% select(result, predictors[ (ceiling(n.preds/3)*2+1) : n.preds]), 
         lower.panel=panel.smooth2, upper.panel=panel.cor, diag.panel=panel.hist)
   
   #look also at interactions between result and rainfall
-  pairs(coc %>% dplyr::select(result, antecedant_dry_days_std, daymet_precip_std, daymet_3day_std,
+  pairs(coc %>% select(result, antecedant_dry_days_std, daymet_precip_std, daymet_3day_std,
                        daymet_7day_std, daymet_14day_std, daymet_21day_std, daymet_28daySR_std), 
         lower.panel=panel.smooth2, upper.panel=panel.cor, diag.panel=panel.hist)
+  #for zinc, important predictors are likely: 
+  #  totRES (-0.6), intURB_IND (0.6), grass (-0.6), greenery (-0.7), paved (0.6), impervious (0.6), 
+  #  pm25_na (0.5), sqrt_CO2_tot (0.6), sqrt_CO2_com (0.5), roof_intURB_IND (0.5), roof_totRES (-0.6)
+  #  daymet 28day (-0.2), daymet 21day (-0.2)
 }
+
 
 #-----------------------------------------------------------------------------------------------------#
 #  Plot COC vs various predictors: look for potential predictors to model & sources of heterogeneity  #
@@ -181,26 +186,24 @@ lp_plots()
 pr_plots()
 tlp_plots()
 mp_plots()
+#for zinc, 14, 21 and 28-day precip don't show evidence of heteroskedasticity.  
+#   location, agency, landuse show heteroskedasticity
 
-#for TKN:
-#14-day & 21-day precip look the best -- most evenly spaced data...
-#mPrecip is better than the rest!
-#   location, agency(!), landuse(!!), month(!!), season(!) and year do show heteroskedasticity
-
-#best predictors for this COC; make sure to only have one version (transformed or not) of each predictor!
-best_predictors <- c("roofs", "nodev", "sqrt_traffic", #"traffic",
-                     "sqrt_popn", "sqrt_CO2_res", "sqrt_CO2_almostTotal", 
-                     "sqrt_CO2_road", "devAge2", "roof_intURB", "roof_intURB_IND")
+#best predictors for this COC; make sure to only have one version (transformed or not) of each predictor!                  
+best_predictors <- c("totRES", "intURB_IND", "grass", "greenery", "not_greenBE", "paved", "impervious", "trees", "sqrt_traffic",  
+                     "pm25_na", "sqrt_CO2_com", "sqrt_CO2_nonroad", "sqrt_CO2_almostTotal", "sqrt_CO2_transport",
+                     "roof_intURB_IND", "roof_totRES")
 
 pred_i <- which(predictors %in% best_predictors)
-lp_plots(pred_i)
+#lp_plots(pred_i)
+lp_plots2(pred_i)  #this version plots up to 16 per page
 
 #examine correlations between predictors; generate a second vector of only predictors that aren't highly correlated
 #  this second vector will be used to generate FormX
 pairs(coc[best_predictors], lower.panel=panel.smooth2, upper.panel=panel.cor, diag.panel=panel.hist)
 
-elements_to_remove <- c("sqrt_CO2_road", "nodev", #"traffic", 
-                        "sqrt_nodev", "sqrt_popn", "roof_intURB_IND")  #these predictors are highly correlated with others
+elements_to_remove <- c("greenery", "grass", "paved", "impervious", 
+                        "sqrt_CO2_com", "sqrt_CO2_almostTotal", "roof_intURB_IND")  #these predictors are highly correlated with others
 best_predictors2 <- best_predictors[!(best_predictors %in% elements_to_remove)]
 
 bp_coefs <- bp_signs <- rep(NA, length(best_predictors))
@@ -212,26 +215,25 @@ for(i in 1:length(best_predictors)) {
 bp_signs <- sign(bp_coefs)
 
 
-
 #--------------------------------------------------#
 #  Any evidence of changes in COC conc over time?  #
 #--------------------------------------------------#
 
-if (run_exploratory_code==TRUE) {
+if(run_exploratory_code==TRUE) {
   #for each agency, is there a trend in COC concentration over time?
   library(lattice)
   xyplot(result~start_date|agency, data=coc,
          xlab="time", ylab="log(conc)",
          strip=function(bg="white",...)
-           strip.default(bg="white",...),
+         strip.default(bg="white",...),
          panel=function(x,y) {
            panel.grid(h=-1, v=2)
            I1 <- order(x)
            llines(x[I1], y[I1], col=1)
          })
-  #   For TKN, there might be a seasonal trend in Snohomish?
+  #   For zinc, no obvious pattern of change over time (although some agencies may have a hint of 
+  #     increase over time)
 }
-
 
 
 #---------------------------------------------------#
@@ -316,6 +318,8 @@ if(run_exploratory_code==TRUE) {
            I1 <- order(x)
            llines(x[I1], y[I1], col=1)
          })
+  #for total zinc, start to see a decrease in zinc conc. by location in the first daymet precip; signal gets stronger
+  #   with increasing length of time for rainfall.  Slight signal with antecedant dry days
 }
 
 
@@ -326,18 +330,16 @@ if(run_exploratory_code==TRUE) {
 #see lines 126-128 for selection of predictors that are important for this COC!
 coc2 <- coc %>%
   dplyr::select(result,
-         oconc,
-         cen=nondetect_flag,
-         location=loc, 
-         latitude, longitude,
-         agency,
-         land_use,
-         year, 
-         month, season, start_date,
-         all_of(best_predictors),
-         dry=antecedant_dry_days_std,
-         rain=daymet_14day_std,  #choose whichever precip measure makes the most sense for this coc!
-         mPrecip=mPrecip  #note: if one of the other mPrecip measures looked better, use it here instead!
+                location=loc, 
+                latitude, longitude,
+                agency,
+                land_use,
+                year, 
+                month, season, start_date,
+                all_of(best_predictors),
+                dry=antecedant_dry_days_std,
+                rain=daymet_14day_std,  #choose whichever precip measure makes the most sense for this coc!
+                mPrecip=mPrecip  #note: if one of the other mPrecip measures looked better, use it here instead!
   ) %>%
   mutate(year=as.factor(year))  %>%
   mutate(landuse = case_when(
@@ -370,20 +372,11 @@ rain <- "daymet 14-day, standardized"  #precip measure that was used for this CO
 #  Formulas for Possible Predictor Combinations  #
 #------------------------------------------------#
 
-if (run_exploratory_code==TRUE) {
-  #looking to see if there are relationships between TKN and various seasonal items.  Could try 10-day avg daymet temperature??
-  par(mfrow=c(2,2))
-  boxplot(coc2$result~coc2$season)  #winter & spring are pretty indistinguishable.  Combine into one, using season3
-  boxplot(coc2$result~coc2$month)
-  boxplot(coc2$result~coc2$monthlyPrecip)
-  boxplot(coc2$result~coc2$dry)
-}
-
 weather <- c("rain", "summer", "dry")
 
-#FormX <- as.formula( paste("result ~ landuse + ", paste(weather, collapse=" + "), " + ", paste(best_predictors2, collapse=" + ")) )
-FormX <- as.formula( paste("result ~ ", paste(weather, collapse=" + "), " + ", paste(best_predictors2, collapse=" + ")) )
+FormX <- as.formula( paste("result ~ landuse + ", paste(weather, collapse=" + "), " + ", paste(best_predictors2, collapse=" + ")) )
 #NOTE: it is not practical at this point to add interactions -- that will come once we find best model using just main effects
+#      Also, don't include pairs of highly correlated predictors here (e.g.: nodev:devAge, paved:impervious, impervious:grass)
 
 
 #-------------------------------------------------------#
@@ -397,18 +390,10 @@ FormX <- as.formula( paste("result ~ ", paste(weather, collapse=" + "), " + ", p
 # Steps 1-2: fit LM for ALL PREDICTORS to data using gls; look for heterogeneity
 #-----------
 
-if (run_exploratory_code==TRUE) {
+if(run_exploratory_code==TRUE) {
   M.gls1X <- gls(FormX, data=coc2, method="REML")  #use REML for comparing diff't random variances
   E.1X <- resid(object=M.gls1X, type="normalized")  
   boxplots.resids2(M.gls1X, E.1X, "X")  #check for heterogeneity in residuals vs fitted values; look for source in other plots
-  
-  
-  #Step 3:  Choose a variance structure (if there was heterogeneity)
-  #-------  for selecting random structure, use REML to compare - its better at capturing random structure
-  #         REML estimates the random effects by considering linear combinations of the data that remove the 
-  #         fixed effects. If these fixed effects are changed, the likelihoods of the two models will not be directly comparable.
-  #         Compare AIC for the various beyond-optimal models with different variance structures.
-  #         Alternately, can use likelihood ratio test (anova) to compare nested models
   
   #is there heteroscedasticity in any of these potential covariates?
   plot(coc2$result ~ coc2$location)
@@ -421,8 +406,8 @@ if (run_exploratory_code==TRUE) {
   plot(coc2$result ~ coc2$rain)
   abline(lm(coc2$result ~ coc2$rain))
   plot(coc2$result ~ coc2$monthlyPrecip)
-  plot(coc2$result ~ coc2$mPrecip, col=colors_location[as.numeric(coc2$location)])
-  #for 
+  plot(coc2$result ~ coc2$mPrecip)
+  #for Zinc, dry is the most likely source of heteroskedasticity
   
   
   #Step 3:  Choose a variance structure (if there was heterogeneity)
@@ -431,43 +416,54 @@ if (run_exploratory_code==TRUE) {
   #         fixed effects. If these fixed effects are changed, the likelihoods of the two models will not be directly comparable.
   #         Compare AIC for the various beyond-optimal models with different variance structures.
   #         Alternately, can use likelihood ratio test (anova) to compare nested models
-  
+
   M.gls2X <- gls(FormX, data=coc2, method="REML", weights=varIdent(form= ~1|agency))
   M.gls3X <- gls(FormX, data=coc2, method="REML", weights=varIdent(form= ~1|location))
   
   anova(M.gls1X, M.gls2X, M.gls3X)
-  #for TKN: AIC is slightly better (dAIC = 1.2) for location (3); BIC is much better for agency (2)
+  #for Total Zinc: AIC & BIC are best for location
   
   #look at residuals for the three variance structure options
   par(mfrow=c(2,2), mar=c(4.5, 4.5, 4, 1), xaxt="s")
   plot(fitted(M.gls1X), resid(object=M.gls1X, type="normalized"), main="no variance structure", xlab="fitted values", ylab="normalized residuals", col="gray", pch=16)
   plot(fitted(M.gls2X), resid(object=M.gls2X, type="normalized"), main="variance covariate: agency", xlab="fitted values", ylab="normalized residuals", col="gray", pch=16)
   plot(fitted(M.gls3X), resid(object=M.gls3X, type="normalized"), main="variance covariate: location", xlab="fitted values", ylab="normalized residuals", col="gray", pch=16)
+  
+  #residual plots for best fit models -- look for homogeneity of residuals
+  E.3X <- resid(object=M.gls3X, type="normalized")  
+  boxplots.resids2(M.gls3X, E.3X, "X")
 }
 
-#variance functions for best fit models so far
-vf1X <- varIdent(form= ~1|agency)
+#variance functions for best fit model so far
+vf1X <- varIdent(form= ~1|location) 
+
 
 # Steps 4-6: Find the proper random effects structure; look for temporal and spatial autocorrelation
 #-----------  note: look for spatial correlation AFTER setting random effects!
 
-if (run_exploratory_code==TRUE) {
-
+if(run_exploratory_code==TRUE) {
   #----Model with Variance Function 1----#
   M.vf1X <- gls(FormX, data=coc2, method="REML", weights=vf1X)
+  E.vf1X <- resid(object=M.vf1X, type="normalized")  
+  
+  #plots of residuals: no variance structure vs. variance structure
+  par(mfrow=c(2,2), mar=c(4,4,4,1))
+  plot(fitted(M.gls1X), E.1X, main="no variance structure", xlab="fitted values", xaxt="s", ylab="normalized residuals", col="gray", pch=16)
+  plot(fitted(M.vf1X), E.vf1X, main="variance covariate: location", xlab="fitted values", xaxt="s", ylab="normalized residuals", col="gray", pch=16)
+  
   
   #Random intercept model; this is nested in the best fit model from Step 2, so can compare with a likelhiood ratio test
   M1.lme1X <- lme(data=coc2, FormX, random = ~1|agency/location, method="REML", weights=vf1X,
                   control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
   anova(M.vf1X, M1.lme1X)  #the likelihood ratio test p-value compares the two nested models, and whether they are significantly different
-  #For TKN, with the set of best_predictors2 (best_predictors with highly correlated predictors removed), 
-  #  the model with random intercept is significantly better than without
+  #For total zinc, the model with random intercept is better than without
 }
 
 #random structure for best fit model so far
 r1X <- formula(~1|agency/location)
 
-if (run_exploratory_code==TRUE) {
+
+if(run_exploratory_code==TRUE) {
   #best random effects structure & residual plots to test it
   M1.rX <- lme(data=coc2, FormX, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
   summary(M1.rX)
@@ -475,11 +471,10 @@ if (run_exploratory_code==TRUE) {
   boxplots.resids2(M1.rX, E1.rX, "X")
   
   #Check for temporal correlation; look for patterns in Auto-correlation plot for residuals
-  #  NOTE:  currently, data are sorted by magnitude, so there may be high auto-correlation artifact!
   par(mfrow=c(2,2))
   plot(E1.rX~coc2$start_date, pch=16, col="cadet blue")
   acf(E1.rX, na.action=na.pass, main="Auto-correlation plot for residuals")  #look for lines extending past blue dashed range
-  #NOTE: we should fix this, as acf assumes the DF is sorted by date (NOT by value!!)
+  #for total zinc, no indication of temporal autocorrelation
   
   #Check for spatial correlation
   mydata2 <- data.frame(E1.rX, coc2.longitude=jitter(coc2$longitude, amount=0.05), coc2.latitude=jitter(coc2$latitude, amount=0.05))  #jitter the X-Y coordinates, so that data points aren't on top of each other
@@ -491,9 +486,8 @@ if (run_exploratory_code==TRUE) {
   plot(Vario1)  #if there is no spatial correlation, will see a horizontal bar of points at the top of the plot
   Vario2 <- variogram(E1.rX ~ 1, mydata2, alpha = c(0, 45, 90,135) )
   plot(Vario2)  #do we see any different patterns in the different directions, or roughly the same pattern?
-  #for TKN, no indication of spatial autocorrelation
+  #for zinc, no indication of spatial autocorrelation
 }
-
 
 # Steps 7-8: Find the proper fixed effects structure; use ML for model comparisons
 #-----------  
@@ -531,13 +525,13 @@ if(run_exploratory_code==TRUE) {
     }
   }
   
-  #combine one, two and three-predictor options into one dataframe
-  dd <- rbind(dd.1, dd.2, dd.3)  #, dd.1, dd.2, dd.3)
+  #combine one, two-predictor options into one dataframe  (3-predictor models always had one predictor non-signif)
+  dd <- rbind(dd.1, dd.2)  #, dd.1, dd.2, dd.3)
   
   # dd.str <- paste(dd$Var1, dd$Var2, dd$Var3)  #vector with strings of the predictor sets
   
   for (i in 1:length(best_predictors)) {
-    aa <- which(cor(coc2[, best_predictors]) [, i] >= 0.85)
+    aa <- which(abs(cor(coc2[, best_predictors]) [, i] ) >= 0.85)
     aa <- names(aa)
     for (j in 1:length(aa)) {
       bb <- which(dd[, 1] == best_predictors[i] & dd[, 2] == aa[j] | 
@@ -624,9 +618,6 @@ if(run_exploratory_code==TRUE) {
   # }
   # proc.time() - ptm  #stop the clock;  9 minutes for 386 models
   
-  landuseAIC <- AIC(lme(data=coc2, as.formula(paste("result~landuse+", paste(weather, collapse="+"))), random = r1X, 
-                              method="ML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8)))
-  
   par(mfrow=c(4,4), mar=c(1,2,2,0), oma=c(1,1,1,1))
   # gg <- rep("black", length(ee))
   # gg[c(which(is.na(dd$Var3)), which(is.na(dd$Var3))+nrow(dd), which(is.na(dd$Var3))+2*nrow(dd), which(is.na(dd$Var3))+3*nrow(dd))] <- "turquoise"   #make formulas with only 2 landscape predictors red
@@ -636,18 +627,18 @@ if(run_exploratory_code==TRUE) {
   gg[which(str_detect(as.character(ee), "rain"))] <- "light blue"   #make formulas with "rain" light blue
   gg[which(str_detect(as.character(ee), "dry"))] <- "goldenrod"   #make formulas with "dry" goldenrod
   gg[which(str_detect(as.character(ee), "dry") & str_detect(as.character(ee), "rain"))] <- "green"   #make formulas with "dry" goldenrod
-  plot(my.aics, col=gg, xaxt="n", pch=16, main="rain=blue, dry=gold, both=green")
-  abline(h=landuseAIC, col="gray")
-    #  plot(my.aics, col=ifelse(str_detect(as.character(ee), "rain"), "light blue", "black"), xaxt="n", yaxt="n", pch=16, main="rain=light blue")
+  plot(my.aics, col=gg, xaxt="n", yaxt="n", pch=16, main="rain=blue, dry=gold, both=green")
+  #  plot(my.aics, col=ifelse(str_detect(as.character(ee), "rain"), "light blue", "black"), xaxt="n", yaxt="n", pch=16, main="rain=light blue")
   
-  colAIC <- c("red", "orange", "yellow", "light green", "green3", "cadet blue", "purple1", "tan3", "salmon", "maroon1", "goldenrod", "dark green")
+  colAIC <- c("red", "orange", "yellow", "light green", "green3", "cadet blue", "purple1", "tan3", "salmon", "maroon1", "goldenrod", "orange", "pink", "purple")
   for (i in 1:length(best_predictors)) {
     plot(my.aics, col=ifelse(str_detect(as.character(ee), best_predictors[i]), colAIC[i], "black"), xaxt="n", yaxt="n", pch=16, main=paste(best_predictors[i], "=", colAIC[i]) )
-    abline(h=landuseAIC, col="gray")
   }
   
   plot.new()
-  text(x=0.5, y=0.5, labels=paste("Landuse AIC", round(landuseAIC, 1)), cex=2)
+  text(x=0.5, y=0.5, labels=paste("Landuse AIC", 
+                                  round(AIC(lme(data=coc2, as.formula(paste("result~landuse+", paste(weather, collapse="+"))), random = r1X, 
+                                                method="ML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))), 1)), cex=2)
   
   #arrange formulae and AICs according to order of AIC value, from smallest to largest
   my.formulas.m4 <- ee[order(my.aics)]
@@ -655,12 +646,20 @@ if(run_exploratory_code==TRUE) {
   my.aics.m4 <- my.aics[order(my.aics)]
   my.aics.m4[1:10]  #what are the top 10 AIC's?
   
-  save(my.formulas.m4, my.aics.m4, file=(here("formulas_and_aics", "total_kjeldahl_nitrogen_m4_censtat.RData")))
+  save(my.formulas.m4, my.aics.m4, file=(here("..", "scripts", "formulas_and_aics", "total_zinc_below800_m4.RData")))  #models based on all zinc data < 800ug/L
 }
 
 if (run_exploratory_code==FALSE) {
-  load(file=here("formulas_and_aics", "total_kjeldahl_nitrogen_m4_censtat.RData"))
+ load(file=here("..", "scripts", "formulas_and_aics", "total_zinc_below800_m4.RData"))  #models based on all zinc data
 }
+
+
+# #which formula is best, that includes roof_nonRES?  (According to McIntyre et al 2019 paper, 
+# #  commercial and industrial roofs are biggest shedder of zinc into stormwater)
+# aa <- grep("roof_intURB_IND", my.formulas.m4)  #ordered list (by AIC value) of all formulae that include roof_nonRES
+# my.aics.m4[aa]  #first entry has the lowest AIC
+# my.formulas.m4[aa]  #first formula has the lowest AIC (its from an ordered list, by AIC value)
+
 
 
 
@@ -668,41 +667,52 @@ if (run_exploratory_code==FALSE) {
 #  Quantiles List for Plotting Interactions  #
 #--------------------------------------------#
 
-# #list of quantiles for all landscape predictors
-qList <- list(devAge2=quantile(coc2$devAge2, probs=c(0,.25,.50,.75,1)),
-              sqrt_traffic=quantile(coc2$sqrt_traffic, probs=c(0,.25,.50,.75,1)),
-              sqrt_CO2_road=quantile(coc2$sqrt_CO2_road, probs=c(0,.25,.50,.75,1))
-)
+#list of quantiles for all landscape predictors
+qList <- list(paved=quantile(coc2$paved, probs=c(0,.25,.50,.75,1)),
+              impervious=quantile(coc2$impervious, probs=c(0,.25,.50,.75,1)),
+              sqrt_CO2_almostTotal=quantile(coc2$sqrt_CO2_almostTotal, probs=c(0,.25,.50,.75,1)),
+              sqrt_CO2_transport=quantile(coc2$sqrt_CO2_transport, probs=c(0,.25,.50,.75,1)),
+              greenery=quantile(coc2$greenery, probs=c(0, .25, .50, .75, 1)),
+              greenery_bareEarth=quantile(coc2$greenery_bareEarth, probs=c(0, .25, .50, .75, 1)),
+              not_green=quantile(coc2$not_green, probs=c(0, .25, .50, .75, 1)),
+              not_greenBE=quantile(coc2$not_greenBE, probs=c(0, .25, .50, .75, 1)),
+              sqrt_traffic=quantile(coc2$sqrt_traffic, probs=c(0,.25,.50,.75,1))
+              )
 
 
-#------------------------#
-#  Models 1, 3, 4 and 5  #
-#------------------------#
-
-#NOTE: when I ran these including "dry", it was NOT significant.  Remove from fixed effects AND variance structure!
+#--------------------#
+#  Models 1, 3, & 4  #
+#--------------------#
+# 
+# #variance functions for best fit model so far
+# vf1X <- varIdent(form= ~1|agency)   #varComb(varIdent(form= ~1|agency), varConstPower(form= ~dry))
+# ### SINCE NOT USING DRY IN THE MODEL, SWITCH TO VARIANCE STRUCTURE JUST BASED ON AGENCY!
+# 
 
 #------ Model 1: median value for all locations --------#
 
 Model1 <- gls(data=coc2, result~1, method="ML")  #here, we use the actual concentration, rather than the transformed one
 E1 <- residuals(object=Model1, type="normalized")
 
+
 #------ Model 3: land use + rain with variance structure & random effects ---------#
 
-Form3 <- update(as.formula(paste("result ~ landuse + ", paste(weather, collapse=" + "))), .~. -dry)
-#Form3 <- as.formula(paste("result ~ landuse + ", paste(weather, collapse=" + ")))
+Form3 <- as.formula("result ~ landuse + rain + summer")
 Model3 <- lme(data=coc2, Form3, random = r1X, method="ML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
 E3 <- residuals(object=Model3, type="normalized")
+boxplots.resids2(Model3, E3, "FormX")
+AIC(Model3)
 
-#------ Model 4: no land use; up to 3 predictors + rain ---------#
+#------ Model 4: up to 2 predictors + precip/ season components ---------#
+# note: I tried all sorts of models with 3 predictors, but they always
+#       had at least one predictor that wasn't significant (p-value > 0.05)
+#       Hence, only 1 and 2 predictor models were evaluated.
 
 #run through the top formulas when only best predictors are on the table;
 #  keep only formulas that make sense
-#  NOTE:  removing "dry" from these equations makes sense, as dry is just barely (or not at all) significant
-#  also note that with the censored data statistics, we generated values (based on a distribution) for
-#  censored data points, without consideration for wet/dry/season dynamics.  This makes me less confident
-#  about keeping "dry" in the equation.
-#myForm <- my.formulas.m4[[2]] 
-myForm <- update(my.formulas.m4[[2]], .~. -dry)
+#myForm <- my.formulas.m4[[2]]
+myForm <- update(my.formulas.m4[[4]], .~. -dry)  ####2 is paved + sqrt_CO2_xport (AIC=706.7); 3 is paved + sqrt_traffic (AIC=710.3); 5 is not_greenBE + sqrt_CO2_xport (AIC=710.9)
+myForm <- update(my.formulas.m4[[5]], .~. -dry +rain:not_greenBE)
 
 #these lines of code assess fit of this particular model in terms of COC vs. individual predictors, and predictor correlation
 myModel <- lme(data=coc2, myForm, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
@@ -710,65 +720,188 @@ myModel <- lme(data=coc2, myForm, method="ML", random=r1X, weights=vf1X, control
 summary(myModel)
 AIC(myModel)
 plot.single.preds(myModel)
-check.cor(myModel)
+#check.cor(myModel)
 boxplots.resids2(myModel, residuals(myModel, type="normalized"), "X")
 
-#formulas that are worth considering (single plots of predictors make sense)
-Form4a <- formula(result ~ rain + summer + sqrt_traffic + devAge2) #my.formulas.m4[[2]]; AIC=796.6
-Form4b <- formula(result ~ rain + summer + sqrt_CO2_road + devAge2) #my.formulas.m4[[5]]; AIC=799.7
-Form4c <- formula(result ~ rain + summer + sqrt_traffic + nodev) #my.formulas.m4[[8]]; AIC=801.4
+
+#note: no "dry" predictor; variance covariate = location
+Form4a <- formula(result ~ rain + summer + not_greenBE + sqrt_CO2_transport)  #my.formulas.m4[[5]]; AIC=711.3
+Model4a <- lme(data=coc2, Form4a, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+E4a <- residuals(object=Model4a, type="normalized")
+
+Form4.5 <- formula(result ~ rain + summer + not_greenBE + sqrt_CO2_transport + rain:not_greenBE)  #my.formulas.m4[[5]]; AIC=711.3
+Form4.4 <- formula(result ~ rain + summer + greenery + sqrt_CO2_transport + rain:greenery)  #my.formulas.m4[[5]]; AIC=711.3
+Form4.3 <- formula(result ~ rain + summer + paved + sqrt_traffic + rain:paved)  #my.formulas.m4[[5]]; AIC=711.3
+Form4.2 <- formula(result ~ rain + summer + paved + sqrt_CO2_transport + rain:paved)  #my.formulas.m4[[5]]; AIC=711.3
+Model4.5 <- lme(data=coc2, Form4.5, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+Model4.4 <- lme(data=coc2, Form4.4, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+Model4.3 <- lme(data=coc2, Form4.3, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+Model4.2 <- lme(data=coc2, Form4.2, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+AIC(Model4.5, Model4.4, Model4.3, Model4.2)
+
+# #note: no "dry" predictor; variance covariate = location
+# Form4b <- formula(result ~ rain + summer + sqrt_traffic + paved)  #my.formulas.m4[[9]]; AIC=710.2
+# Model4b <- lme(data=coc2, Form4b, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# E4b <- residuals(object = Model4b, type="normalized")
+# 
+# # #note: no "dry" predictor; variance covariate = location
+# Form4c <- formula(result ~ rain + summer + not_greenBE)  #my.formulas.m4[[11]]; AIC=710.60
+# Model4c <- lme(data=coc2, Form4c, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# E4c <- residuals(object = Model4c, type="normalized")
+
+
+# #note: no "dry" predictor; variance covariate = location
+# Form4a <- formula(result ~ rain + summer + not_greenBE + sqrt_traffic)  #my.formulas.m4[[4]]; AIC=707.3
+# Model4a <- lme(data=coc2, Form4a, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# E4a <- residuals(object=Model4a, type="normalized")
+# 
+# #note: no "dry" predictor; variance covariate = location
+# Form4b <- formula(result ~ rain + summer + sqrt_traffic + paved)  #my.formulas.m4[[9]]; AIC=710.2
+# Model4b <- lme(data=coc2, Form4b, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# E4b <- residuals(object = Model4b, type="normalized")
+# 
+# # #note: no "dry" predictor; variance covariate = location
+# Form4c <- formula(result ~ rain + summer + not_greenBE)  #my.formulas.m4[[11]]; AIC=710.60
+# Model4c <- lme(data=coc2, Form4c, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# E4c <- residuals(object = Model4c, type="normalized")
+
+
+# Model 4a interactions
+Form4 <- Form4a
+Model4 <- Model4a
+E4 <- residuals(object = Model4, type="normalized")
+
+
+#try adding interactions and see if they are significant
+M4.sub1 <- update(Model4, . ~ . + rain:sqrt_CO2_transport) #significant (p=0.0208)
+anova(Model4, M4.sub1)
+M4.sub2 <- update(Model4, . ~ . + rain:not_greenBE)  #significant (p=0.0061)  -- this one is more significant and gets a better AIC by 2 points
+anova(Model4, M4.sub2)
+# M4.sub3 <- update(M4.sub2, .~., + rain:sqrt_traffic)   #for some reason, it doesn't work to add two interation terms with rain in the model...
+# anova(Model4, M4.sub2, M4.sub3)
+M4.sub4 <- update(Model4, .~. + sqrt_CO2_transport:not_greenBE)  #highly insignificant (p=0.1249)
+anova(Model4, M4.sub4)
+
+AIC(Model4, M4.sub1, M4.sub2)
+
+
+# #try adding interactions and see if they are significant
+# M4.sub1 <- update(Model4, . ~ . + rain:sqrt_traffic) #significant (p=0.0076)
+# anova(Model4, M4.sub1)
+# M4.sub2 <- update(Model4, . ~ . + rain:not_greenBE)  #significant (p=0.0025)  -- this one is more significant and gets a better AIC by 2 points
+# anova(Model4, M4.sub2)
+# # M4.sub3 <- update(M4.sub2, .~., + rain:sqrt_traffic)   #for some reason, it doesn't work to add two interation terms with rain in the model...
+# # anova(Model4, M4.sub2, M4.sub3)
+# M4.sub4 <- update(Model4, .~. + sqrt_traffic:not_greenBE)  #highly insignificant (p=0.5574)
+# anova(Model4, M4.sub4)
+# 
+# AIC(Model4, M4.sub1, M4.sub2)
+
+#Plot formula 4 interaction
+Plot.Quantile("rain", "not_greenBE", M4.sub2, yEqn=7.5)
+myModel <- M4.sub2
+boxplots.resids2(myModel, residuals(myModel, type="normalized"), "X")
+#This relationship seems plausible, both on basis of data theoretically.  It also reduces AIC by 9-pts (to 700.17)
+
+Form4a.int <- update(Form4a, .~. +rain:not_greenBE)
+Model4a.int <- update(Model4a, .~. +rain:not_greenBE)
+E4a.int <- residuals(object = Model4a.int, type = "normalized")
+boxplots.resids2(Model4a.int, E4a.int, "X")
+
+
+# Model 4b interactions
+Form4 <- Form4b
+Model4 <- Model4b
+
+#try adding interactions and see if they are significant
+M4.sub2 <- update(Model4, . ~ . + rain:paved)  #highly significant (p=0.0004)
+anova(Model4, M4.sub2)
+
+#Plot formula 4 interaction
+Plot.Quantile("rain", "paved", M4.sub2, yEqn=7.5)
+myModel <- M4.sub2
+boxplots.resids2(myModel, residuals(myModel, type="normalized"), "X")
+AIC(myModel)  #AIC = 724.4
+Model4b.int <- M4.sub2
+Form4b.int <- update(Form4b, .~. +rain:paved)
+
+# Model 4c interactions
+Form4 <- Form4c
+Model4 <- Model4c
+
+#try adding interactions and see if they are significant
+M4.sub1 <- update(Model4, . ~ . + rain:not_greenBE) #slightly significant (p=0.0023)
+anova(Model4, M4.sub1)
+
+#Plot formula 4 interaction
+Plot.Quantile("rain", "not_greenBE", M4.sub1, yEqn=7.5)
+myModel <- M4.sub1
+summary(myModel)  #note that sqrt_traffic p-value = 0.017;   AIC=726.0
+plot.single.preds(myModel)
+#check.cor(myModel)
+AIC(update(myModel, .~. -sqrt_traffic))  #removing sqrt_traffic leads to a signif worse AIC (726 vs 731.9)
+Model4c.int <- M4.sub1
+Form4c.int <- update(Form4c, .~. +rain:not_greenBE)
+
+# pre-2025: we tried putting all three model options onto the stormwater heatmap, and noticed that there are some
+#  problems with models 4b and 4c.  Model 4b (greenery) was a favorite, until we observed that non-vegetated
+#  open space (mudflats, rock formations) were shown as high zinc areas. Model 4a (paved + sqrt_CO2_almostTotal) 
+#  wasn't as good as model 4c (paved + sqrt_traffic), because the CO2 data are a surrogate for traffic,
+#  and are not at as good of resolution as the traffic data.  The CO2 data weren't capturing the roadways
+#  as well as we would have liked, as the data grid is larger, so they look blocky/ gridded.  We initially concluded
+#  that paved + sqrt(traffic) would be the best model.
+
+# early-2025: When we tried doing the model validation with paved + sqrt(traffic), it did NOT work at all.  Predicted values
+#  were crazy high, so we went back to the drawing board.  We additionally discovered that the paved predictor is
+#  likely NOT linear, as the model validation data required paved to be truncated at 1.0 in order to get reasonable
+#  values.  This is the attempt to use greenery as the predictor.
+
+# Jun-2025: Christian tried applying several models to the Puget Sound heatmap, and found that some don't look so good/
+#  aren't very believeable when plotted on the heatmap.  We need a traffic-based (road, traffic, CO2) predictor in there.  
+#  road density wasn't correlated with zinc, and CO2_transport was really blocky because of its large grid size.  Traffic
+#  works quite well with greenery/ greenery_bareEarth.  We'll try this with the validation data to see how it goes.
+
+# Sep-2025: Following discussion with Christian, we decided to try modeling Zinc without Port of Tacoma, which seemed to
+#  be throwing off the model and is quite different from the other sites.  Christian also wasn't convinced that the traffic
+#  numbers for POT were correct (still need to get his gut-check on that).  Once POT was removed, the fit to traffic & not_green
+#  is even better.
+
+# Oct-2025: After testing the model validation data to the model from Sept 2025 (not_greenBE + sqrt_traffic, with POT removed),
+#  we decided to go back to the not_greenBE only model.  The fit of the Sept 2025 model wasn't good to vaidation data - even worse
+#  than the greenery model from before.  We will provide this information in the tech doc, including a model validation exercise
+#  where we try running the model validation on land use category data to see how it compares.  Zinc is really tricky to model
+#  without a spatial image layer showing which locations have galvanized roofs, fencing or ductwork.
+
+# Dec-2025: Top 3 models worth considering were paved+sqrt_CO2_transport (AIC=706.7), paved+sqrt_traffic (AIC=710.3), and 
+#  not_greenBE+sqrt_CO2_transport (AIC=710.9).  The first two options included paved, which doesn't do well across the whole SWHM
+#  domain, as it may not be a linear relationship.  I like the combo of not_green and CO2 transport, which captures the fact that
+#  green space doesn't have zinc-containing items, AND that cars on roadways contribute to zinc in stormwater.  Galvanized metals
+#  are not included in this equation, but we don't have a great way to capture the spotty nature of those right now.
 
 
 #####  Best fit Model4  ####
+Form4a.int
+Model4a.int   #AIC = 703.3
+E4a.int <- residuals(object = Model4a.int, type = "normalized")
+boxplots.resids2(Model4a.int, E4a.int, "X")
 
-Form4 <- Form4a
-Model4 <- lme(data=coc2, Form4, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-E4 <- residuals(object = Model4, type = "normalized")
-
-#try adding interactions and see if they are significant
-M4.sub1 <- update(Model4, . ~ . + rain:sqrt_traffic) #not significant (p=0.1844)
-anova(Model4, M4.sub1)
-M4.sub2 <- update(Model4, . ~ . + rain:devAge2)  #not significant (p=0.5384)
-anova(Model4, M4.sub2)
-
-
-Form4 <- Form4b
-Model4 <- lme(data=coc2, Form4, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-E4 <- residuals(object = Model4, type = "normalized")
-
-#try adding interactions and see if they are significant
-M4.sub1 <- update(Model4, . ~ . + rain:sqrt_CO2_road) #not significant (p=0.7386)
-anova(Model4, M4.sub1)
-M4.sub2 <- update(Model4, . ~ . + rain:devAge2)  #not significant (p=0.5145)
-anova(Model4, M4.sub2)
-M4.sub3 <- update(Model4, . ~ . + sqrt_CO2_road:devAge2)  #not significant (p=0.2135)
-anova(Model4, M4.sub3)
-
-
-Form4 <- Form4c
-Model4 <- lme(data=coc2, Form4, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-E4 <- residuals(object = Model4, type = "normalized")
-
-#try adding interactions and see if they are significant
-M4.sub1 <- update(Model4, . ~ . + rain:sqrt_traffic) #not significant (p=0.2144)
-anova(Model4, M4.sub1)
-M4.sub2 <- update(Model4, . ~ . + rain:nodev)  #not significant (p=0.3398)
-anova(Model4, M4.sub2)
-
-
-#best model
-Form4 <- Form4a
-Model4 <- lme(data=coc2, Form4, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+# 
+# #####  Best fit Model4  ####
+# Form4c.int
+# Model4c.int   #AIC = 703.3
+# E4c.int <- residuals(object = Model4c.int, type = "normalized")
+# boxplots.resids2(Model4c.int, E4c.int, "X")
 
 
 #------ Compare models and plot ---------#
-AIC(Model1, Model3, Model4)
+AIC(Model1, Model3, Model4a, Model4a.int)
 
-AIC(Model1, Model3, Model4)[,2] - AIC(Model4)
+AIC(Model1, Model3, Model4a, Model4a.int)[,2] - AIC(Model4a.int)
 
+Model4 <- Model4a.int
 
-#plot model predictions for each model (above)
-if (run_exploratory_code==TRUE) {
+if(run_exploratory_code==TRUE) {
+  #plot model predictions for each model (above)
   M1.preds <- predict(Model1)
   plot.preds.vs.results(M1.preds)
   
@@ -784,40 +917,37 @@ if (run_exploratory_code==TRUE) {
 #  Look at the Fits of the Models  #
 #----------------------------------#
 
-Model4a <- lme(data=coc2, Form4a, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-E4a <- residuals(object = Model4a, type = "normalized")
-
-# Model4b <- lme(data=coc2, Form4b, method="ML", random=r1X, weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-# E4b <- residuals(object = Model4b, type = "normalized")
-
 #check residuals for each model, to see if they tell us anything important
 par(mfrow=c(2,2), mar=c(2,4,4,1), oma=c(0,0,0,0))
-plot(coc2$location, E1, main="Null Model", ylab="Residuals", xaxt="n", col=colors_agency[c(1,1,1,2,3,4,4,4,5,5,5,6,6,6)])
-axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "POT", "Sea", "Sno", "Tac"))
+plot(coc2$location, E1, main="Null Model", ylab="Residuals", xaxt="n", col=colors_location)
+axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
 abline(h=0, col="gray")
-plot(coc2$location, E3, main="Categorical Land Use Model", ylab="Residuals", xaxt="n", col=colors_agency[c(1,1,1,2,3,4,4,4,5,5,5,6,6,6)])
-axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "POT", "Sea", "Sno", "Tac"))
+plot(coc2$location, E3, main="Categorical Land Use Model", ylab="Residuals", xaxt="n", col=colors_location)
+axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
 abline(h=0, col="gray")
-plot(coc2$location, E4a, main="Spatial Predictor Model", ylab="Residuals", xaxt="n", col=colors_agency[c(1,1,1,2,3,4,4,4,5,5,5,6,6,6)])
-axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "POT", "Sea", "Sno", "Tac"))
-abline(h=0, col="gray")
-# plot(coc2$location, E4b, main="Model 4b: sqrt_CO2_road + devAge2", ylab="Residuals", xaxt="n", col=colors_agency[c(1,1,1,2,3,4,4,4,5,5,5,6,6,6)])
-# axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "POT", "Sea", "Sno", "Tac"))
+# plot(coc2$location, E4a, main="Model 4a: traffic, paved, pm25", ylab="Residuals", xaxt="n", col=colors_location)
+# axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
 # abline(h=0, col="gray")
-
+plot(coc2$location, E4a.int, main="Spatial Predictor Model", ylab="Residuals", xaxt="n", col=colors_location)
+axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
+abline(h=0, col="gray")
+# plot(coc2$location, E4b, main="Model 4b: traffic, greenery, pm25", ylab="Residuals", xaxt="n", col=colors_location)
+# axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
+# abline(h=0, col="gray")
+# plot(coc2$location, E4c, main="Model 4c: trees, intURB_IND, pm25", ylab="Residuals", xaxt="n", col=colors_location)
+# axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
+# abline(h=0, col="gray")
+# plot(coc2$location, E4c.int, main="Model 4c.int", ylab="Residuals", xaxt="n", col=colors_location)
+# axis(side=1, at=c(2,3.8,5.2,7,10,13), labels=c("King", "Pie", "PoT", "Sea", "Sno", "Tac"))
+# abline(h=0, col="gray")
 
 
 # Step 9: Refit models with REML and apply graphical model validation; check for homogeneity, 
 #--------    normality and independence
 
-#------ Model 3: land use + rain ---------#    ##### NOTE: for some reason, the acf is giving what I think are completely
-#                                                          bogus plots of auto-correlation.  Looking at lattice plots from
-#                                                          earlier in code, doesn't look like that level of autocorrelation
-#                                                          could possibly be present.  Maybe something is off with the work
-#                                                          we did to employ censtat methods?  Will look into this with non-censtat TKN
+#------ Model 3: landuse only, with variance structure & random structure ---------#
 
-
-M3.final <- lme(data=coc2, result~landuse+rain+summer, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+M3.final <- lme(data=coc2, Form3, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
 E3.final <- residuals(object=M3.final, type="normalized")
 
 #plot residuals against agency, year, month, date and other unused predictors; check if model is missing something important!
@@ -830,22 +960,16 @@ acf(E3.final, na.action=na.pass, main="Auto-correlation plot for residuals")  #l
 mydata2 <- data.frame(E3.final, coc2.longitude=jitter(coc2$longitude, amount=0.05), coc2.latitude=jitter(coc2$latitude, amount=0.05))  #jitter the X-Y coordinates, so that data points aren't on top of each other
 coordinates(mydata2)<-c("coc2.longitude","coc2.latitude")
 bubble(mydata2,"E3.final",col=c("black","grey"), main="Residuals",xlab="X-coordinates", ylab="Y-coordinates")
-#variogram to test for spatial correlation; 
+#variogram to test for spatial correlation
 Vario1 = variogram(E3.final ~ 1, mydata2)
 plot(Vario1)  #if there is no spatial correlation, will see a horizontal bar of points at the top of the plot
 Vario2 <- variogram(E3.final ~ 1, mydata2, alpha = c(0, 45, 90,135) )
 plot(Vario2)  #do we see any different patterns in the different directions, or roughly the same pattern?
-# for Nitrite-Nitrate, there may be spatial autocorrelation with Model3 (south end/ SW site seem biased)
 
 
-#------ Model 4: no land use; up to 3 predictors + rain ---------#  ##### NOTE: for some reason, the acf is giving what I think are completely
-#                                                          bogus plots of auto-correlation.  Looking at lattice plots from
-#                                                          earlier in code, doesn't look like that level of autocorrelation
-#                                                          could possibly be present.  Maybe something is off with the work
-#                                                          we did to employ censtat methods?  Will look into this with non-censtat TKN
+#------ Model 4: no land use; up to 3 predictors + rain ---------#
 
-
-M4.final <- lme(data=coc2, Form4a, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+M4.final <- lme(data=coc2, Form4a.int, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
 E4.final <- residuals(object=M4.final, type="normalized")
 
 #plot residuals against agency, year, month, date and other unused predictors; check if model is missing something important!
@@ -863,21 +987,23 @@ Vario1 = variogram(E4.final ~ 1, mydata2)
 plot(Vario1)  #if there is no spatial correlation, will see a horizontal bar of points at the top of the plot
 Vario2 <- variogram(E4.final ~ 1, mydata2, alpha = c(0, 45, 90,135) )
 plot(Vario2)  #do we see any different patterns in the different directions, or roughly the same pattern?
+#looks fine
 
+AIC(M3.final, M4.final)
 
 #-----------------#
 #  Save Formulas  #
 #-----------------#
 
-#save important items with TKN-specific names
-TKN.coc2 <- coc2
-TKN.r1X <- r1X
-TKN.vf1X <- vf1X
-TKN.Form3 <- Form3
-TKN.Form4 <- Form4a  #sqrt_traffic + devAge2
-TKN.rain <- rain
+#save important items with phosphorus-specific names
+totZn.coc2 <- coc2
+totZn.r1X <- r1X
+totZn.vf1X <- vf1X
+totZn.Form3 <- Form3
+totZn.Form4 <- Form4a.int
+totZn.rain <- rain
 
-save(TKN.coc2, TKN.r1X, TKN.vf1X, TKN.Form3, TKN.Form4, TKN.rain, file=here("..", "results", "Frequentist_Total Kjeldahl Nitrogen Models_censtat.RData"))
+save(totZn.coc2, totZn.r1X, totZn.vf1X, totZn.Form3, totZn.Form4, totZn.rain, file=here("..", "results", "Frequentist_Total Zinc Models_notGreenBE.RData"))
 
 
 #-------------------------------#
@@ -885,96 +1011,32 @@ save(TKN.coc2, TKN.r1X, TKN.vf1X, TKN.Form3, TKN.Form4, TKN.rain, file=here(".."
 #-------------------------------#
 
 #generate plots that are shown in Rmarkdown script
-TKN.null <- gls(data = coc2, result ~ 1, method = "REML") 
-TKN.M3 <- lme(data = coc2, Form3, random = r1X, method = "REML", weights = vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-TKN.M4 <- lme(data = coc2, Form4, random = r1X, method = "REML", weights = vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+totZn.null <- gls(data = coc2, result ~ 1, method = "REML") 
+totZn.M3 <- lme(data = coc2, Form3, random = r1X, method = "REML", weights = vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+totZn.M4 <- lme(data = coc2, Form4a.int, random = r1X, method = "REML", weights = vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+#totZn.M4.alt <- lme(data = coc2, Form4c.int, random = r1X, method = "REML", weights = vf2X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
 
-TKN_models <- list(
-  Null_Model = TKN.null,
-  Categorical_Land_Use_Model = TKN.M3,
-  Spatial_Predictor_Model = TKN.M4
+#P.M4.alt <- lme(data = coc2, Form4.alt, random = r1X, method = "REML", weights = vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
+
+totZn_models <- list(
+  Null_Model = totZn.null,
+  Categorical_Land_Use_Model = totZn.M3,
+  Spatial_Predictor_Model = totZn.M4
 )
 
-huxtablereg(TKN_models,
-            single.row = TRUE, custom.model.names = names(TKN_models)) %>%
+huxtablereg(totZn_models,
+            single.row = TRUE, custom.model.names = names(totZn_models)) %>%
   set_bottom_border(1, -1, 0.4) %>%
   set_bold(1, -1, TRUE) 
 
 theme_set(theme_sjplot())
-plotreg(TKN_models, custom.title = "Regression Results, Total Kjeldahl Nitrogen", custom.model.names = names(TKN_models))
-plot_models(TKN_models, title = "Regression Results, Total Kjeldahl Nitrogen", m.labels = names(TKN_models),legend.title = "Models", show.values = TRUE,show.intercept = TRUE)
+plotreg(totZn_models, custom.title = "Regression Results, Total Zinc", custom.model.names = names(totZn_models))
+plot_models(totZn_models, m.labels = names(totZn_models),legend.title = "Models", show.values = TRUE,show.intercept = TRUE)
 
 
-# #------------------------------------#
-# #  Censored Data Regressions vs LME  #     Is the method of dividing reporting limits by 2 acceptable for TKN?
-# #------------------------------------#
-# 
-# #try a LME model using Regression on Order Statistics (ros) to generate missing values (NADA package)
-# tkn.ros <- ros(obs=coc$result, censored=coc$nondetect_flag)  #I think this package fills in for ND values using a distribution 
-# tkn.df <- as.data.frame(tkn.ros)  #make a df out of the ROS-generated data
-# coc2.sorted <- coc2[order(coc2$result), ]  #sort the coc2 dataframe by result, to match tkn.df
-# coc.ros <- cbind(coc2.sorted, tkn.df)
-# Form4.ros <- formula(modeled ~ rain + summer + sqrt_CO2_road + devAge2)  #run mle model on the ROS-generated ND values
-# M4.ros <- lme(data=coc.ros, Form4.ros, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-# 
-# #compare ROS model to 0.5*DL model -- both are LME
-# summary(M4.ros)$coefficients$fixed
-# summary(M4.final)$coefficients$fixed  #censored MLE model (ND values set at 0.5*detection limit)
-# #model that utilizes ROS for filling in ND values is close to M4.final (MLE) model using 0.5DL, at least in landscape predictors
-# 
-# 
-# #Try the CenReg function to generate a (linear) model
-# coc <- coc %>%
-#   mutate(summer = case_when(
-#     season=="1" ~ "0",
-#     season=="2" ~ "0",
-#     season=="3" ~ "1",
-#     season=="4" ~ "0")) %>%
-#   mutate(summer=as.factor(summer))
-# 
-# #cenreg is a censored regression function, which accounts for the fact that data are censored; it does NOT use LME model (just linear)
-# tkn.reg <- with(coc, cenreg(Cen(oconc, nondetect_flag) ~ daymet_14day_std + summer + sqrt_CO2_road + devAge2, 
-#                             dist="lognormal"))
-# summary(tkn.reg)$coefficients  ###  NOT A MIXED EFFECTS MODEL!!  ###
-# summary(M4.ros)$coefficients$fixed  #mixed effects model using regression on order statistics (ROS)
-# summary(M4.final)$coefficients$fixed  #censored MLE model (ND values set at 0.5*detection limit)
-# #all of these have similar enough values of landscape predictors and intercept that I think we can safely rely on 
-# #   the linear mixed effects model for picking our best fit predictors
-# 
-# 
-# #-----------------------#
-# #  Test ROS for Form4a  #     Results are similar to those for Form4b (above)
-# #-----------------------#
-# 
-# #try a LME model using Regression on Order Statistics (ros) to generate missing values (NADA package)
-# Form4a.ros <- formula(modeled ~ rain + summer + sqrt_traffic + devAge2)  #run mle model on the ROS-generated ND values
-# M4a.ros <- lme(data=coc.ros, Form4a.ros, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-# 
-# M4a.final <- lme(data=coc2, Form4a, random = r1X, method="REML", weights=vf1X, control = lmeControl(maxIter = 1e8, msMaxIter = 1e8))
-# 
-# #compare ROS model to 0.5*DL model -- both are LME
-# summary(M4a.ros)$coefficients$fixed
-# summary(M4a.final)$coefficients$fixed  #censored MLE model (ND values set at 0.5*detection limit)
-# #model that utilizes ROS for filling in ND values is close to M4.final (MLE) model using 0.5DL, at least in landscape predictors
-# 
-# AIC(M4a.final, M4a.ros, M4.final, M4.ros)  #interesting -- the two ROS models have much lower AIC values than the regular MLE models
-# 
-# 
-# #---------------------------------------------#
-# #  Interesting Plotting Package to Play With  #
-# #---------------------------------------------#
-# 
-# install.packages("visreg")
-# library(visreg)
-# 
-# par(mfrow=c(2,2), mar=c(4,4,4,2))
-# visreg(Model4, "sqrt_CO2_road", ylab="ln(TKN)")
-# visreg(Model4, "devAge2", ylab="ln(TKN)")
-# visreg(Model4, "summer", ylab="ln(TKN)")
-# visreg(Model4, "rain", ylab="ln(TKN)")
-# 
-# par(mfrow=c(2,2), mar=c(4,4,4,2))
-# visreg(M4.ros, "sqrt_CO2_road", ylab="ln(TKN)", main="ROS model")
-# #visreg(tkn.reg, "sqrt_CO2_road", ylab="ln(TKN)", main="Censored Regression model")
-# visreg(Model4, "sqrt_CO2_road", ylab="ln(TKN)", main="LME model")
-# 
+#----------------------------------#
+#  Plots to support Eva's summary  #
+#----------------------------------#
+
+# NONE :)
+

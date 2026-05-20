@@ -3,6 +3,8 @@
 
 # Author: Eva Dusek Jennings
 # Revised: Nov 29, 2022
+# Revised: Apr 22, 2025 -- updated Zinc to use greenery model rather than sqrt_traffic + paved
+# Revised: Oct 21, 2025 -- updated Zinc to use not_greenBE model
 #-------------------------------------------------------------------------------------------
 
 source("Bayesian Model Plot Functions.R")  #script with plotting functions for Bayesian figures
@@ -178,17 +180,20 @@ rm(P.brm, P.CI, P.coc2)
 #--------------#
 
 #load data 
-load(file="../results/Bayesian_TotalZinc.RData")  #Bayesian model
-load(file="../results/Frequentist_Total Zinc Models.RData")  #frequentist mixed effects model, for coc2 dataframe
-#load(file="../results/TotZn_80_CI_wr_psau.Rdata")  #credibility intervals for all Puget Sound watersheds      #### NOT RUN YET!
+load(file="../results/Bayesian_TotalZinc_not_greenBE.RData")  #Bayesian model
+load(file="../results/Frequentist_Total Zinc Models_notGreenBE.RData")  #frequentist mixed effects model, for coc2 dataframe
 
 ###   PLOT 1   ###
 # posterior densities and chain traces for important predictors; max of 5 predictors per page
 #get_variables(totZn.brm)
-plot(totZn.brm, variable=c("b_Intercept", "b_rain", "b_summer1", "b_sqrt_traffic"))
-plot(totZn.brm, variable=c("b_paved", "b_rain:paved"))  #recognizable covariates
+plot(totZn.brm, variable=c("b_Intercept", "b_rain", "b_summer1", "b_sqrt_CO2_transport"), bins=100)
+plot(totZn.brm, variable=c("b_not_greenBE", "b_rain:not_greenBE"), bins=100)
 plot(totZn.brm, variable=c("b_sigma_Intercept", "sd_agency__Intercept", "sd_agency:location__Intercept",
-                         "sd_location__sigma_Intercept", "nu"))   #covariates dealing with variability
+                         "sd_location__sigma_Intercept", "nu"), bins=100)   #covariates dealing with variability
+# plot(totZn.brm, variable=c("b_Intercept", "b_rain", "b_summer1", "b_sqrt_traffic"))
+# plot(totZn.brm, variable=c("b_paved", "b_rain:paved"))  #recognizable covariates
+# plot(totZn.brm, variable=c("b_sigma_Intercept", "sd_agency__Intercept", "sd_agency:location__Intercept",
+#                            "sd_location__sigma_Intercept", "nu"))   #covariates dealing with variability
 
 
 ###   PLOT 2   ###
@@ -197,15 +202,31 @@ obs.vs.pred.1(totZn.brm, totZn.coc2, "Total Zinc")
 
 ###   PLOT 3   ###
 #Observed vs Predicted plots for multiple predictors, with colors showing a selected predictor.  
-p1 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "sqrt_traffic", "Reds")
-p2 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "paved", "Greens")
+p1 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "not_greenBE", "Reds")
+p2 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "sqrt_CO2_transport", "Greens")
 p3 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "rain", "Blues")
 p4 <- obsPredPlot2(totZn.brm, totZn.coc2, "Total Zinc", "summer", paletteCol=c("#fdbe85", "#d94701"))  #oranges for summer palette
+# grid.arrange(p1, p3, p4, nrow=2, ncol=2)
+# lay <- rbind(c(1,1,1,1,1,1,1,1,NA,NA,NA,NA,NA,NA),  #custom layout to make up for long predictor name (sqrt_CO2_road plot was narrower to accomodate the name in the legend)
+#              c(3,3,3,3,3,3,3,4,4,4,4,4,4,4))
+# grid.arrange(p1, p3, p4, layout_matrix=lay)
+
 grid.arrange(p1, p2, p3, p4, nrow=2, ncol=2)
+
+
+# p1 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "sqrt_traffic", "Reds")
+# p2 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "paved", "Greens")
+# p3 <- obsPredPlot(totZn.brm, totZn.coc2, "Total Zinc", "rain", "Blues")
+# p4 <- obsPredPlot2(totZn.brm, totZn.coc2, "Total Zinc", "summer", paletteCol=c("#fdbe85", "#d94701"))  #oranges for summer palette
+# grid.arrange(p1, p2, p3, p4, nrow=2, ncol=2)
 
 ###   PLOT 4   ###
 #Credible Intervals vs Raw Data plots  
-credInt.vs.rawPreds.2preds(totZn.coc2, totZn.brm, "Total Zinc", preds=c("sqrt_traffic", "paved"))
+credInt.vs.rawPreds.2preds(totZn.coc2, totZn.brm, "Total Zinc", preds=c("not_greenBE", "sqrt_CO2_transport"))
+#credInt.vs.rawPreds.2preds(totZn.coc2, totZn.brm, "Total Zinc", preds=c("sqrt_traffic", "paved"))
+
+#credInt.vs.rawPreds.2preds(TSS.coc2, TSS.brm, "Total Suspended Solids", preds=c("sqrt_traffic", "devAge2"))
+
 
 ###   PLOT 5   ###
 #Global Intercept (+/- 95% CI) with Distributions of Location-Specific Intercepts
@@ -213,8 +234,10 @@ plotIntercepts.global.location(totZn.brm, xlims=c(2.4, 5.6))
 
 # ###   PLOT 6   ###
 # #plot transformed & standardized median values (black) with upper/ lower 80% CI's 
+# plotBayesianCIs(totZn.CI, "totZn", c("greenery"))
 # plotBayesianCIs(totZn.CI, "totZn", c("sqrt_traffic", "devAge2"))
 # 
+
 # ###   PLOT 7   ###
 # #plot raw median values (black) with upper/ lower 80% CI's
 # plotBayesianCIs.raw(totZn.CI, "totZn", c("sqrt_traffic", "devAge2"))

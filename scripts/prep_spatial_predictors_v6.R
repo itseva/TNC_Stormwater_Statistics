@@ -12,13 +12,18 @@
 
 # Author: Eva Dusek Jennings
 # Date: Jun 16, 2023
+# Rev:  Apr 28, 2025 - add bare earth and generate greenery_bareEarth
+# Rev:  Jun 2, 2025  - add road density
+# Rev:  Jun 6, 2025  - add CO2_cmv_rail (sqrt & log-transformed) and sqrt_paved
+# Rev:  Jun 16, 2025  - add June2025_predictors.csv columns, including max, mean, sum of traffic and CO2 predictors
+# Rev:  Dec 17, 2025 - add tnc_trees, to be used instead of percent_tree_cover
 #---------------------------------------------
 
-#library(tidyverse)
-library(here)
+library(tidyverse)
 #library(magrittr)
+library("lattice")
 
-sp <- read.csv(file=here("..", "data", "spatial_predictors_raw.csv")) %>%
+sp <- read.csv(file="../data/spatial_predictors_raw_v3.csv") %>%            ### Make sure its the right version here!
   dplyr::rename(location=Location_N) %>%   #rename column "Location_N" to "location"
   dplyr::filter(! (location %in% c("POSOUTFALL_60",  #remove the following sites: Port of Seattle outfall (unrepresentative of other watersheds)
                             "PIEHIRES_OUT",   #                            Pierce County High Residential (data were collected in the middle of a stream)
@@ -52,7 +57,15 @@ sp$totRES <- sp$ruRES + sp$urbRES  #urban + rural residential
 sp$intURB_IND <- sp$intURB + sp$IND  #intensive urban + industrial
 sp$roof_intURB_IND <- sp$roof_intURB + sp$roof_IND  #roofs: intensive urban + industrial
 sp$roof_totRES <- sp$roof_ruRES + sp$roof_urbRES  #roofs: intensive urban + industrial
-sp$greenery <- sp$grass_low_veg + sp$shrub_med_veg + sp$percent_tree_cover/100  #low, med and high veg
+sp$greenery <- sp$grass_low_veg + sp$shrub_med_veg + sp$tnc_trees  #low, med and high veg
+sp$greenery_bareEarth <- sp$greenery + sp$bare_earth
+sp$not_greenBE <- 1-sp$greenery_bareEarth
+sp$not_green <- 1-sp$greenery
+
+# sp$greenery_old <- sp$grass_low_veg + sp$shrub_med_veg + sp$percent_tree_cover/100  #low, med and high veg
+# sp$greenery_bareEarth_old <- sp$greenery_old + sp$bare_earth
+# sp$not_greenBE_old <- 1-sp$greenery_bareEarth_old
+# sp$not_green_old <- 1-sp$greenery_old
 
 #look at histograms of the data; determine which columns require log-transformation;
 #  look for explanatory variables that have extreme observations; these will likely need
@@ -87,6 +100,8 @@ dotchart(sp$grass_low_veg, main="grass", group=sp$loc)
 dotchart(sp$shrub_med_veg, main="shrub", group=sp$loc) 
 dotchart(sp$greenery, main="greenery", group=sp$loc)
 dotchart(sp$imperv_ground, main="paved", group=sp$loc)  
+dotchart(sqrt(sp$imperv_ground), main="sqrt_paved", group=sp$loc)  
+dotchart(log(sp$imperv_ground), main="log_paved", group=sp$loc)  
 dotchart(sp$imperv_roofs, main="roofs", group=sp$loc)  
 dotchart(sp$impervious, main="impervious", group=sp$loc)
 #dotchart(log(sp$no_dev*100+1), main="log_nodev", group=sp$loc)  
@@ -94,6 +109,7 @@ dotchart(sp$no_dev, main="nodev", group=sp$loc)
 dotchart(sqrt(sp$no_dev), main="sqrt nodev", group=sp$loc)  
 dotchart(sp$percent_tree_cover, main="trees", group=sp$loc)  
 dotchart(sp$traffic, main="traffic", group=sp$loc)  
+dotchart(sp$road_density, main="roads", group=sp$loc)
 dotchart(sp$pop_per_ha, main="popn", group=sp$loc) 
 dotchart(sqrt(sp$pop_per_ha), main="sqrt popn", group=sp$loc) 
 #dotchart(log(sp$pop_per_ha), main="log popn", group=sp$loc)  #too much
@@ -150,15 +166,67 @@ sp$CO_almostTotal <- sp$CO_emissions_cmv + sp$CO_emissions_commercial + sp$CO_em
   sp$CO_emissions_residential
 #sp$CO_corr <- sp$CO_emissions_cmv + sp$CO_emissions_onroad + sp$CO_emissions_rail + sp$CO_emissions_residential
 sp$CO_transport <- sp$CO_emissions_cmv + sp$CO_emissions_onroad + sp$CO_emissions_rail  #this is general movement of goods/ people category
+sp$CO_cmv_rail <- sp$CO_emissions_cmv + sp$CO_emissions_rail  #only include cmv (marine-related) and rail
 
-par(mfrow=c(3,2))
+par(mfrow=c(3,3))
 dotchart(sp$CO_almostTotal, main="CO2_almostTotal", group=sp$loc)
 dotchart(sqrt(sp$CO_almostTotal), main="sqrt CO2_almostTotal", group=sp$loc)
 # dotchart(sp$CO_corr, main="CO2_corr", group=sp$loc)
 # dotchart(sqrt(sp$CO_corr), main="sqrt CO2_corr", group=sp$loc)
 dotchart(sp$CO_transport, main="CO2_transport", group=sp$loc)
 dotchart(sqrt(sp$CO_transport), main="sqrt CO2_transport", group=sp$loc)
+dotchart(sp$CO_cmv_rail, main="CO2_cmv_rail", group=sp$loc)
+dotchart(sqrt(sp$CO_cmv_rail), main="sqrt CO2_cmv_rail", group=sp$loc)
+dotchart(log(1 + sp$CO_cmv_rail), main="log CO2_cmv_rail", group=sp$loc)
 #use sqrt_CO2_almostTotal, and sqrt_CO2_transport
+
+# #these were attempts to figure out how to combine CO2 data wiht traffic data.  Not my favorite for explainability and justifiability
+# sp$CO_cmv_rail_percent <- sp$CO_cmv_rail / sp$CO_transport
+# sp$CO_MarineRail_to_Road_ratio <- sp$CO_cmv_rail / sp$CO_emissions_onroad
+# dotchart(sp$CO_MarineRail_to_Road_ratio, main="ratio CMV/Rail to Onroad CO2", group=sp$loc)
+
+#combine some sources of emissions (road, rail, marine = transport)
+sp$CO_transport_max <- sp$CO_emissions_cmv_max + sp$CO_emissions_onroad_max + sp$CO_emissions_rail_max
+sp$CO_transport_mean <- sp$CO_emissions_cmv_mean + sp$CO_emissions_onroad_mean + sp$CO_emissions_rail_mean
+sp$CO_transport_sum <- sp$CO_emissions_cmv_sum + sp$CO_emissions_onroad_sum + sp$CO_emissions_rail_sum
+
+par(mfrow=c(4,3))
+dotchart(sp$CO_emissions_cmv_max, main="CO2_cmv_max", group=sp$loc)
+dotchart(sp$CO_emissions_cmv_mean, main="CO2_cmv_mean", group=sp$loc)
+dotchart(sp$CO_emissions_cmv_sum, main="CO2_cmv_sum", group=sp$loc)
+dotchart(sp$CO_emissions_onroad_max, main="CO2_road_max", group=sp$loc)
+dotchart(sp$CO_emissions_onroad_mean, main="CO2_road_mean", group=sp$loc)
+dotchart(sp$CO_emissions_onroad_sum, main="CO2_road_sum", group=sp$loc)
+dotchart(sp$CO_emissions_rail_max, main="CO2_rail_max", group=sp$loc)
+dotchart(sp$CO_emissions_rail_mean, main="CO2_rail_mean", group=sp$loc)
+dotchart(sp$CO_emissions_rail_sum, main="CO2_rail_sum", group=sp$loc)
+dotchart(sp$CO_transport_max, main="CO2_transport_max", group=sp$loc)
+dotchart(sp$CO_transport_mean, main="CO2_transport_mean", group=sp$loc)
+dotchart(sp$CO_transport_sum, main="CO2_transport_sum", group=sp$loc)
+
+par(mfrow=c(2, 3))
+dotchart(sp$CO_transport_max, main="CO2_transport_max", group=sp$loc)
+dotchart(sp$CO_transport_mean, main="CO2_transport_mean", group=sp$loc)
+dotchart(sp$CO_transport_sum, main="CO2_transport_sum", group=sp$loc)
+dotchart(sqrt(sp$CO_transport_max), main="sqrt_CO2_transport_max", group=sp$loc)
+dotchart(sqrt(sp$CO_transport_mean), main="sqrt_CO2_transport_mean", group=sp$loc)
+dotchart(sqrt(sp$CO_transport_sum), main="sqrt_CO2_transport_sum", group=sp$loc)
+
+
+par(mfrow=c(4,3))
+dotchart(sp$rail_max, main="rail_max", group=sp$loc)
+dotchart(sp$rail_mean, main="rail_mean", group=sp$loc)
+dotchart(sp$rail_sum, main="rail_sum", group=sp$loc)
+dotchart(sp$rail_max, main="rail_max", group=sp$loc)
+dotchart(sqrt(sp$rail_mean), main="sqrt_rail_mean", group=sp$loc)
+dotchart(sqrt(sp$rail_sum), main="sqrt_rail_sum", group=sp$loc)
+dotchart(sp$traffic_max, main="traffic_max", group=sp$loc)
+dotchart(sp$traffic_mean, main="traffic_mean", group=sp$loc)
+dotchart(sp$traffic_sum, main="traffic_sum", group=sp$loc)
+dotchart(sqrt(sp$traffic_max), main="sqrt_traffic_max", group=sp$loc)
+dotchart(sqrt(sp$traffic_mean), main="sqrt_traffic_mean", group=sp$loc)
+dotchart(sqrt(sp$traffic_sum), main="sqrt_traffic_sum", group=sp$loc)
+
 
 
 par(mfrow=c(3,2))
@@ -208,6 +276,7 @@ sp_t <- sp %>%
                 trees=percent_tree_cover,
                 nodev=no_dev,
                 grass=grass_low_veg,
+                roads=road_density,
                 popn=pop_per_ha,
                 no2=NO_2,
                 CO2_res=CO_emissions_residential,
@@ -216,14 +285,19 @@ sp_t <- sp %>%
                 CO2_nonroad=CO_emissions_nonroad,
                 CO2_almostTotal=CO_almostTotal,
                 CO2_transport=CO_transport,
+                CO2_cmv_rail=CO_cmv_rail,
                 pm25_na=PM25_NA,
                 partSA=particulate_surface_area
                 ) %>%
   dplyr::mutate(sqrt_intURB=sqrt(intURB),
                 sqrt_totRES=sqrt(totRES),
                 sqrt_nodev=sqrt(nodev),
+                log_paved=log(paved),
                 sqrt_popn=sqrt(popn),
                 sqrt_traffic=sqrt(traffic),
+                sqrt_traffic_max=sqrt(sp$traffic_max),
+                sqrt_traffic_mean=sqrt(sp$traffic_mean), 
+                sqrt_traffic_sum=sqrt(sp$traffic_sum),
                 sqrt_slope=sqrt(slope),
                 sqrt_CO2_res=sqrt(CO2_res),
                 sqrt_CO2_com=sqrt(CO2_com),
@@ -231,6 +305,11 @@ sp_t <- sp %>%
                 sqrt_CO2_nonroad=sqrt(CO2_nonroad),
                 sqrt_CO2_almostTotal=sqrt(CO2_almostTotal),
                 sqrt_CO2_transport=sqrt(CO2_transport),
+                sqrt_CO2_cmv_rail=sqrt(CO2_cmv_rail),
+                log_CO2_cmv_rail=log(1 + CO2_cmv_rail),
+                sqrt_CO2_transport_max=sqrt(sp$CO_transport_max),
+                sqrt_CO2_transport_mean=sqrt(sp$CO_transport_mean),
+                sqrt_CO2_transport_sum=sqrt(sp$CO_transport_sum),
                 devAge2=devAge^2,
                 sqrt_roof_intURB=sqrt(roof_intURB),
                 sqrt_roof_urbRES=sqrt(roof_urbRES),
@@ -246,12 +325,23 @@ sp_t <- sp %>%
                 intURB_IND,
                 grass,
                 greenery,
+                greenery_bareEarth,
+                not_greenBE,
+                not_green,
                 paved,
+                log_paved,
                 roofs,
                 impervious,
                 nodev, #sqrt_nodev,
                 trees,
-                sqrt_traffic, #traffic,   
+                sqrt_traffic, #traffic,  
+                sqrt_traffic_max,
+                sqrt_traffic_mean,
+                sqrt_traffic_sum,
+                roads,
+                rail_max,
+                rail_mean,
+                rail_sum,
                 sqrt_popn,
                 no2,
                 #pm25,
@@ -264,6 +354,11 @@ sp_t <- sp %>%
                 sqrt_CO2_nonroad,
                 sqrt_CO2_almostTotal,
                 sqrt_CO2_transport,
+                sqrt_CO2_cmv_rail,
+                log_CO2_cmv_rail,
+                sqrt_CO2_transport_max,
+                sqrt_CO2_transport_mean,
+                sqrt_CO2_transport_sum,
                 #dev_pre_1975,
                 #dev_1975_1990,
                 #dev_1990_2000,
@@ -287,7 +382,7 @@ sp_std <- t((t(sp_t[, 3:ncol(sp_t)])-sp_means[3:ncol(sp_t)])/sp_sds[3:ncol(sp_t)
 sp_std <- data.frame(location=as.factor(sp_t[,c("location")]), loc=as.factor(sp_t[,c("loc")]), sp_std)
 sp_final <- sp_std
 
-write.csv(sp_final, here("..", "processed_data", "spatial_predictors_standardized.csv"), row.names=FALSE)
+write.csv(sp_final, file="../processed_data/spatial_predictors_standardized.csv", row.names=FALSE)
 
 
 #save mean and sd for standardization as a csv file
@@ -295,7 +390,15 @@ sp_standardization_values <- data.frame(mean=sp_means[3:length(sp_means)],
                                         sd=sp_sds[3:length(sp_sds)])
 rownames(sp_standardization_values) <- colnames(sp_t[3:ncol(sp_t)])
 
-write.csv(sp_standardization_values, here("..", "processed_data", "spatial_predictor_standardization_values.csv"), row.names=TRUE)
+write.csv(sp_standardization_values, file="../processed_data/spatial_predictor_standardization_values.csv", row.names=TRUE)
+
+
+
+
+
+
+
+
 
 
 #---------#
@@ -309,9 +412,7 @@ sp_2 <-
              cols=c(2:30))
 dotplot(loc~value | name,  data=sp_2)
 
-
-dotchart(as.matrix(sp_test[, c(2:30)]), group=sp_test$loc)
-
+#dotchart(as.matrix(sp_test[, c(2:ncol(sp_test))]), groups=sp_test$loc)
 
 
 #create new columns for transformed data
@@ -341,11 +442,13 @@ sp_1 <- sp %>%
                 intURB_IND,
                 grass,
                 greenery,
+                trees,
+                greenery_bareEarth,
+                not_greenBE,
                 paved,
                 roofs,
                 impervious,
                 nodev, #sqrt_nodev,
-                trees,
                 traffic, #traffic,
                 popn,
                 no2,
@@ -381,7 +484,7 @@ sp_1_std <- data.frame(loc=as.factor(sp_1[,c("loc")]), sp_1_std)
 
 #make the dataframe longer -- combine columns by predictor name
 sp_1_std.a <- pivot_longer(sp_1_std,
-                           cols=c(2:30))
+                           cols=c(2:ncol(sp_1_std)))
 names(sp_1_std.a) <- c("loc", "predictor", "standardized_value")
 
 
@@ -433,10 +536,10 @@ names(sp_2_std.a) <- c("loc", "predictor", "standardized_value")
 #----------------------------#
 
 #plot of untransformed predictors
-dotplot(loc~standardized_value | predictor,  data=sp_1_std.a, col="blue", layout=c(6,5))
+dotplot(loc~standardized_value | predictor,  data=sp_1_std.a, col="blue", layout=c(6,6))
 
 #plot of untransformed predictors
-dotplot(loc~standardized_value | predictor,  data=sp_2_std.a, col="red", layout=c(6,5))  #layout=(column, rows)
+dotplot(loc~standardized_value | predictor,  data=sp_2_std.a, col="red", layout=c(6,2))  #layout=(column, rows)
 
 
 

@@ -246,12 +246,14 @@ obsPredPlot2.cen <- function(this.brm, this.coc2, this.chemical, pred, paletteCo
 #  using the epred_draws function. This one works for TWO landscape predictors
 credInt.vs.rawPreds.2preds <- function(this.coc2, this.brm, this.chemical, preds) {
 
+  #credInt.vs.rawPreds.2preds(totZn.coc2, totZn.brm, "Total Zinc", preds=c("not_greenBE", "sqrt_CO2_transport"))
+  
   # ####### FOR TESTING ONLY!!
-  # this.coc2 <- Cu.coc2
-  # this.brm <- Cu.brm
-  # this.chemical <- "Copper"
-  # preds <- c("sqrt_traffic", "devAge2")
-  # preds.xformPwr <- c(2, 0.5)  #to which power should we transform each predictor, to generate raw values? (0.5, 1, or 2)
+  # this.coc2 <- totZn.coc2
+  # this.brm <- totZn.brm
+  # this.chemical <- "Total Zinc"
+  # preds <- c("sqrt_CO2_transport", "not_greenBE")
+  # preds.xformPwr <- c(2, 1)  #to which power should we transform each predictor, to generate raw values? (0.5, 1, or 2)
   # preds.xlab <- c("Traffic (AADT, raw)", "Development Age (raw)" )
   # #######  
   
@@ -357,6 +359,13 @@ credInt.vs.rawPreds.1pred <- function(this.coc2, this.brm, this.chemical, preds)
   # this.brm <- P.brm
   # this.chemical <- "Phosphorus"
   # preds <- "sqrt_CO2_road"
+  # #######
+
+  # ####### FOR TESTING ONLY!!  Note -- copper won't work here, as it has 2 predictors!
+  # this.coc2 <- totZn.coc2
+  # this.brm <- totZn.brm
+  # this.chemical <- "Total Zinc"
+  # preds <- "greenery"
   # #######
   
   #throw an error if number of predictors is not 1 or 2

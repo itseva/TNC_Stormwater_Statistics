@@ -90,6 +90,7 @@ imp_ground <- tnc_landcover$eq(6)$rename("imperv_ground")  #roads & parking area
 imp_roofs <- tnc_landcover$eq(7)$rename("imperv_roofs")
 grass_low_veg <- tnc_landcover$eq(1)$rename("grass_low_veg")
 shrub_med_veg <- tnc_landcover$eq(2)$rename("shrub_med_veg")
+tnc_trees <- tnc_landcover$eq(3)$rename("tnc_trees")
 #The tnc_landcover image can also be used for the following:
 # values: [0, 1, 2, 3, 4,5, 6, 7]
 # labels: [ 'No data',
@@ -263,7 +264,8 @@ predictors <- ee$Image(0)$blend(
                #percent.transportation,
                percent.int_urban, percent.ag, percent.water, percent.open_space, 
                percent.public, percent.rural_res, 
-               impervious, imp_ground, imp_roofs, no2, grass_low_veg, shrub_med_veg, tree_cover, traffic, population, 
+               impervious, imp_ground, imp_roofs, no2, grass_low_veg, shrub_med_veg, tnc_trees, 
+               tree_cover, traffic, population, 
                pm25, slope, no_dev, age_2000_2014, age_1990_2000, age_1975_1990, age_pre_1975,
                percent.roofs.AG, percent.roofs.intURB, percent.roofs.IND, percent.roofs.urbRES, percent.roofs.ruRES,
                #percent.roofs.TRANS, 
@@ -294,6 +296,8 @@ ee_df <- ee_stats$getInfo()
 df_predictors <- ee_df$features %>%  #band names diff't than image names; constant is traffic
   map("properties") %>%
   rbindlist(fill=TRUE)
+
+df_predictors <- df_predictors %>% relocate(Location_N)
 #built refers to buildup index.  Those are categorical data - maybe shouldn't be averaged?
 
 
@@ -310,7 +314,8 @@ ggplot(df_long) +
   facet_wrap(~name, scales = "free")
 
 # save csv file of predictors
-write.csv(df_predictors, here("..", "data", "spatial_predictors_raw_v1.csv"), row.names=FALSE)
+write.csv(df_predictors, here("data", 
+                              paste0("spatial_predictors_",Sys.Date(),".csv")), row.names=FALSE)
 
 
 #---------------------------------------------

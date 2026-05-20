@@ -6,29 +6,29 @@
 #-------------------------------------------------------------------------------------
 
 #
+library("ggplot2")
 library("gridExtra")  #grid_arrange
 library("ggpubr")  #ggarrange
-library("here")
 library("tidyverse")
 library("dplyr")
 
-if(!require(devtools)) install.packages("devtools")
-devtools::install_github("kassambara/ggpubr")
-install.packages("ggpubr")
-library(ggpubr)
+# if(!require(devtools)) install.packages("devtools")
+# devtools::install_github("kassambara/ggpubr")
+# install.packages("ggpubr")
+# library(ggpubr)
 
 #read in S8 spatial predictor data
-s8.sp.std <- read.csv(here("..", "processed_data", "spatial_predictors_standardized.csv"))
-sp.stdVals <- read.csv(here("..", "processed_data", "spatial_predictor_standardization_values.csv"))
-sp.xformVals <- read.csv(here("..", "processed_data", "spatial_predictor_backtransform_power.csv"))
+s8.sp.std <- read.csv(file="../processed_data/spatial_predictors_standardized.csv")
+sp.stdVals <- read.csv(file="../processed_data/spatial_predictor_standardization_values.csv")
+sp.xformVals <- read.csv(file="../processed_data/spatial_predictor_backtransform_power.csv")
 
 #read in standardized Puget Sound basin values -- min/max and also histogram
-basin.sp <- read.csv(here("..", "data", "predictors_PugetSoundBasin_min_max.csv"), header=TRUE, row.names=1)
-basin.sp.hist <- read.csv(here("..", "data", "predictors_histogram.csv"))  ## make sure there are no commas in the csv file, first!!
+basin.sp <- read.csv(file="../data/predictors_PugetSoundBasin_min_max.csv", header=TRUE, row.names=1)
+basin.sp.hist <- read.csv(file="../data/predictors_histogram.csv")  ## make sure there are no commas in the csv file, first!!
 
 #read in unstandardized, sqrt_transformed traffic for Puget Sound basin.  DON'T USE dev_age -- it means something diff't here!!
 #  Note: also make sure the columns are "numbers" in Excel before running this, otherwise commas will mess it up!
-sq_traf <- read.csv(here("..", "data", "traffic_and_dev_histogram_Nov142023.csv"), header=TRUE, colClasses=c("sqrt_traffic.Count"="numeric") )
+sq_traf <- read.csv(file="../data/traffic_and_dev_histogram_Nov142023.csv", header=TRUE, colClasses=c("sqrt_traffic.Count"="numeric") )
 sq_traf <- sq_traf[, 1:2] %>%
   dplyr::rename(value=Band.Value,
          count=sqrt_traffic.Count) %>%
@@ -39,12 +39,12 @@ sq_traf <- sq_traf[, 1:2] %>%
 
 tr <- ggplot(data=basin.sp.hist[, c(1,3)], aes(x=Band.Value, y=sqrt(sqrt_traffic.Count))) + geom_bar(stat="identity", width=0.2) +
   xlab("scaled & centered sqrt_traffic values") + ylab("sqrt( number of obs )")
-
+tr
 
 
 
 #extract only the spatial predictors used in water quality models
-model.preds <- c("devAge2", "sqrt_traffic", "paved", "sqrt_CO2_road")
+model.preds <- c("devAge2", "sqrt_traffic", "not_greenBE", "sqrt_CO2_road")
 model.sp.std <- s8.sp.std[, which(names(s8.sp.std) %in% model.preds)]
 basin.sp.std <- basin.sp[which(row.names(basin.sp) %in% model.preds), ]
 basin.sp.hist <- basin.sp.hist[, c(1, which(names(basin.sp.hist) %in% paste(model.preds, ".Count", sep="")))]
@@ -57,9 +57,10 @@ basin.sp.hist <- basin.sp.hist[, c("Band.Value", paste(model.preds, ".Count", se
 #Plot of spatial predictors used in models, showing their range in S8 Data and their range
 # in the entire Heatmap region (Puget Sound basin)
 par(mfrow=c(1,1), mar=c(2, 4, 2, 2), oma=c(0, 0, 0, 0))
-ylims <- c(-4, 7)
+ylims <- c(-4, 5)
 plot(1, type="n", xlim=c(0,length(model.preds)+0.5), ylim=ylims, xlab="", xaxt="n",
      ylab="scaled & centered value")
+abline(h=seq(-4, 5), col="gray90")
 for (i in 1:length(model.preds)) {
   model.preds[i]
   arrows(x0=i, y0=basin.sp.std[i, 1], y1=basin.sp.std[i, 2], length=0.25, angle=90, code=3, col="gray", lwd=3)

@@ -6,8 +6,15 @@
 #   Daymet precip data are sqrt transformed, ADD data are log+1 transformed; both data sets are then standardized
 # v5 takes new set of predictors (from July 7, 2021), and does away with unstandardized predictors
 
-# Eva Dusek Jennings
-# July 29, 2021
+# previous revision was July 21, 2021.  Latest revision doesn't change anything, just saves standardization values for daymet precip
+
+# Author:  Eva Dusek Jennings
+# Revised: Jan 22, 2025
+#          May 1, 2025 - add predictors for Zinc: greenery_bareEarth, not_green, not_greenBE
+#          Jun 2, 2025 - add predictor roads (road_density)
+#          Jun 6, 2025 - add predictors (sqrt_paved, sqrt_CO2_cmv_rail, log_CO2_cmv_rail)
+#          Jun 17, 2025 - add predictors for zinc
+#          Dec 17, 2025 - try new trees predictor for greenery
 #----------------------------------------------
 
 library(gtools)
@@ -16,7 +23,7 @@ library(EnvStats)  #note the objects that are masked from other packages...
 library(readr)  #for read_csv
 library(knitr)  #for kable
 library(rmdformats)
-library(hrbrthemes)
+#library(hrbrthemes)
 #library(tidyverse)
 library(showtext)
 library(kableExtra)
@@ -127,6 +134,55 @@ qqplot_cocs <- function(df.coc, title) {
 #this set of scatterplots shows three obvious outliers: one each for nitrite/nitrate, phosphorus, and TSS
 qqplot_cocs(s8data[which(s8data$parameter %in% params),],'Log-Normal Q-Q Plots')
 
+# par(mfrow=c(3,2))
+# x <- s8data[which(s8data$parameter %in% params[1]),]$result
+# qqPlot(x, y=NULL, "norm")
+# qqPlot(x, y=NULL, "lnorm", estimate.params=T)
+# qqPlot(x, y=NULL, "gamma", estimate.params=T)
+# qqPlot(x, y=NULL, "gammaAlt", estimate.params=T)
+# qqPlot(x, y=NULL, "logis", estimate.params=T)
+# qqPlot(x, y=NULL, "lnormAlt", estimate.params=T)
+# 
+# 
+# 
+# #zinc
+# shapiro.test(s8data[which(s8data$parameter %in% params[1]),]$result)$p.val
+# shapiro.test(log(s8data[which(s8data$parameter %in% params[1]),]$result))$p.val
+# 
+# #copper
+# shapiro.test(log(s8data[which(s8data$parameter %in% params[2]),]$result))$p.val
+# 
+# #TSS
+# shapiro.test(log(s8data[which(s8data$parameter %in% params[4]),]$result))$p.val
+# 
+# #Phosphorus
+# shapiro.test(log(s8data[which(s8data$parameter %in% params[3]),]$result))$p.val
+# 
+# #TKN
+# shapiro.test(log(s8data[which(s8data$parameter %in% params[5]),]$result))$p.val
+# 
+# 
+# #make a function for scatter plots
+# qqplot_cocs <- function(df.coc, title) {
+#   p <- ggplot(df.coc, aes(sample=(result))) + stat_qq() + stat_qq_line(aes(color="grey")) + 
+#     theme(legend.position="none") + labs(   #### make this into a qq-plot!
+#       title = title,
+#       subtitle = "Data collected 2009-2013",
+#       caption =
+#         " Data source: Ecology, 2015",
+#       x = "Observations"
+#     )
+#   p + facet_wrap( ~ parameter, scales = 'free')+theme(axis.title.x=element_blank(),
+#                                                       axis.text.x=element_blank(),
+#                                                       axis.ticks.x=element_blank())
+# }
+# 
+# #this set of scatterplots shows three obvious outliers: one each for nitrite/nitrate, phosphorus, and TSS
+# qqplot_cocs(s8data[which(s8data$parameter %in% params),],'Normal Q-Q Plots')
+# 
+# 
+# 
+# 
 
 #------------------------------------------#
 #  Merge COC data with Spatial Predictors  #
@@ -246,6 +302,16 @@ s8data_sp <- s8data_sp %>%
                 antecedant_dry_days_std=(antecedant_dry_days - mean(antecedant_dry_days))/sd(antecedant_dry_days)) %>%
   dplyr::select(-c(daymet_2day, daymet_5day, daymet_10day))
 
+
+#save mean & sd of the daymet precip data for later use
+std_precip <- s8data_sp %>%
+  select(daymet_precip, daymet_14day, daymet_21day) %>%
+  gather(key="dur", value="precip_mm", 1:3) %>%
+  group_by(dur) %>%
+  summarize(mean=mean(precip_mm), 
+            sd=sd(precip_mm))
+  
+write.csv(std_precip, here("..", "processed_data", "daymet_precip_standardization_values.csv"), row.names=FALSE)
 
 
 #----------------------#
