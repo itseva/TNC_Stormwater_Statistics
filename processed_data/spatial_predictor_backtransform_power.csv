@@ -5,3 +5,6 @@ sqrt_CO2_road,2,Onroad CO2 Emissions (tC/km2/year)
 sqrt_CO2_tot,2,Total CO2 Emissions (tC/km2/year)
 paved,1,Proportion of Paved Surfaces
 traffic,1,Traffic (AADT)
+greenery,1,"Proportion of Greenery (grass, shrub, tree cover)"
+not_greenBE,1,Proportion That Is NOT Green or Bare Earth
+sqrt_CO2_transport,2,Transportation CO2 Emissions (tC/km2/yr)
