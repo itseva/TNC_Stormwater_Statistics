@@ -1,0 +1,23 @@
+Name,project,location,CO_emissions_onroad,built,dev_1975_1990,dev_1990_2000,dev_2000_2014,dev_pre_1975,imperv_ground,no_dev,traffic
+Coupeville_BoatLaunch,Coupeville,BoatLaunch,220.56,4.93,0.27,0.02,0.07,0.5,0.21,0.14,0
+Coupeville_CoupevilleWharf,Coupeville,CoupevilleWharf,287.9,4.7,0.12,0.1,0.04,0.53,0.22,0.22,0
+Coupeville_FrontAndMain,Coupeville,FrontAndMain,54.1,5.44,0,0,0,0.86,0.4,0.14,0
+Coupeville_PerkinsBluff,Coupeville,PerkinsBluff,89.09,2.97,0.12,0.02,0.02,0.14,0.09,0.71,0
+GardenEd_W1,GardenEd,W1,399.6,3.81,0.11,0.59,0.3,0,0.24,0,0
+GardenEd_W2,GardenEd,W2,399.6,3.02,0,0.23,0.57,0,0.44,0.21,0
+LahtiDrive,LahtiDrive,Swale,297.39,3.44,0.35,0.16,0.01,0.02,0.23,0.47,0
+LkWA_520-W,LakeWA,520-W,3542.97,1,0,0,0,0,0,0,22217.52
+LkWA_KIR-CW,LakeWA,KIR-CW,3806.95,5.1,0.29,0.01,0.01,0.56,0.19,0.14,1743.13
+LkWA_N.MER,LakeWA,N.MER,3024.87,4.87,0.11,0,0,0.64,0.23,0.26,3023.6
+LkWA_REN-JC,LakeWA,REN-JC,4033.93,5.55,0.04,0,0,0.86,0.34,0.1,2845.53
+MLK Street Sweep SS2,MLK_Street_Sweep,SS2,2493.28,6,0,0,0,1,1,0,18094.72
+MLK Street Sweep SS3,MLK_Street_Sweep,SS3,2493.28,6,0,0,0,1,1,0,13141.08
+MLK Street Sweep SS4,MLK_Street_Sweep,SS4,2493.28,6,0,0,0,1,0.93,0,12820.89
+MLK Street Sweep SS5,MLK_Street_Sweep,SS5,3024.57,6,0,0,0,1,0.58,0,6376.87
+MasonCo_HS-033,MasonCo,HS-033,215.51,6,0,0,0,1,0.58,0,0
+MasonCo_NB-020,MasonCo,NB-020,372.92,4.57,0,0.01,0,0.64,0.22,0.35,0
+WSDOT_I5_MP197.27,WSDOT,I5_MP197.27,3656.07,6,0,0,0,1,1,0,0
+WSDOT_I5_MP197.35,WSDOT,I5_MP197.35,3656.07,6,0,0,0,1,1,0,0
+WSDOT_I5_MP210.71,WSDOT,I5_MP210.71,2106.12,5.14,0.86,0,0,0.14,0.94,0,0
+WSDOT_I5_MP210.85,WSDOT,I5_MP210.85,2924.76,2.67,0.22,0,0,0,0.78,0.78,0
+WSDOT_SR9_MP17.92,WSDOT,SR9_MP17.92,413.65,6,0,0,0,1,0,0,0

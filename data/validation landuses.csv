@@ -1,0 +1,31 @@
+Project,Name,Public,Intensive Urban,Water,Streets and Rights of Way,Residential,Primary ,Secondary ,S8_equiv,Notes
+Coupeville,Coupeville_BoatLaunch,"18,329","16,523","2,316","111,736","216,104",Residential,Streets and Rights of Way,HDR,
+Coupeville,Coupeville_CoupevilleWharf,"32,629","117,617",17,"114,499","145,714",Residential,Intensive Urban,HDR,
+Coupeville,Coupeville_FrontAndMain,,"6,152",20,"2,570",,Intensive Urban,Streets and Rights of Way,COM,
+Coupeville,Coupeville_PerkinsBluff,"2,078","11,050",224,"51,822","284,310",Residential,Streets and Rights of Way,HDR,
+GardenEd,GardenEd_W1,,,,"2,183",,Streets and Rights of Way,,HDR,"SWHM land use layers map shows this still as rural character residential.  It has likely been developed since the data layer map was made, as it looks very much like urban character residential"
+GardenEd,GardenEd_W2,,,,"1,944",,Streets and Rights of Way,,HDR,"SWHM land use layers map shows this still as rural character residential.  It has likely been developed since the data layer map was made, as it looks very much like urban character residential"
+I5 Bridge,I5 Bridge,,"15,987",,"93,397","4,199",Streets and Rights of Way,Intensive Urban,IND,
+LahtiDr,LahtiDrive_LahtiSwale,,,,"18,552","4,079",Streets and Rights of Way,Residential,HDR,SWHM land use layers map shows this being residential.  This is a huge section of land - NOT just street/ right of way.  Definitely a suburban neighborhood
+Lake WA PFAS,LkWA_520-W,,,"3,882",,,Water,,IND,roadway over water
+Lake WA PFAS,LkWA_KIR-CW,,,,"236,305","527,954",Residential,Streets and Rights of Way,HDR,
+Lake WA PFAS,LkWA_N.MER,"69,724","272,078",,"200,705","341,730",Residential,Intensive Urban,COM,SWHM land use layers map shows this primarily being intensive urban (translates to commercial)
+Lake WA PFAS,LkWA_REN-JC,,"727,681",,"620,535","1,033,239",Residential,Intensive Urban,HDR,
+MLK Street Sweep,MLK Street Sweep_SS2,,189,,"1,205",,Streets and Rights of Way,Intensive Urban,IND,"street-only locations should map to ""IND"""
+MLK Street Sweep,MLK Street Sweep_SS3,,4,,351,,Streets and Rights of Way,Intensive Urban,IND,"street-only locations should map to ""IND"""
+MLK Street Sweep,MLK Street Sweep_SS4,,,,597,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""
+MLK Street Sweep,MLK Street Sweep_SS5,,1,,561,,Streets and Rights of Way,Intensive Urban,IND,"street-only locations should map to ""IND"""
+MasonCo,MasonCo_HS-033,,"3,377",,"1,214",,Intensive Urban,Streets and Rights of Way,COM,
+MasonCo,MasonCo_NB-020,,,,"12,312","91,525",Residential,Streets and Rights of Way,HDR,
+Tacoma S8C,TacS8C_230,,"1,227,368","6,604","644,242","361,767",Intensive Urban,Streets and Rights of Way,COM,
+Tacoma S8C,TacS8C_235,,"475,758","7,291","174,813","8,757",Intensive Urban,Streets and Rights of Way,COM,
+Tacoma S8C,TacS8C_237A,,"2,680,024",879,"2,773,654","4,070,645",Residential,Streets and Rights of Way,HDR,
+Tacoma S8C,TacS8C_237B,,"1,157,156",19,"2,119,251","4,645,814",Residential,Streets and Rights of Way,HDR,
+Tacoma S8C,TacS8C_243,,"65,711","1,205","85,713",,Streets and Rights of Way,Intensive Urban,IND,SWHM land use layers map shows this primarily beind industrial
+Tacoma S8C,TacS8C_245,,"20,085","2,058","34,905",,Streets and Rights of Way,Intensive Urban,IND,SWHM land use layers map shows this primarily beind industrial
+Tacoma S8C,TacS8C_254,,"71,134","16,253","72,949",,Streets and Rights of Way,Intensive Urban,IND,SWHM land use layers map shows this primarily beind industrial
+WSDOT,WSDOT_I5_MP197.27,,,,208,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""
+WSDOT,WSDOT_I5_MP197.35,,,,211,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""
+WSDOT,WSDOT_I5_MP210.71,,,,111,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""
+WSDOT,WSDOT_I5_MP210.85,,,,153,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""
+WSDOT,WSDOT_SR9_MP17.92,,,,152,,Streets and Rights of Way,,IND,"street-only locations should map to ""IND"""

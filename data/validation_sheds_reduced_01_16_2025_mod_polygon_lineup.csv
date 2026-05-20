@@ -1,0 +1,31 @@
+Project,Name,dev_1975_1990,dev_1990_2000,dev_2000_2014,dev_pre_1975,imperv_ground,traffic,CO_emissions_onroad,area_m2,Notes
+WSDOT,WSDOT_SR9_MP17.92,0,0,0,1,0.95263621,2350.144268,413.652832,150,"CO2 emissions seem a bit low for a highway.  2/5 of the spot is in a turn lane, maybe reducing the traffic value?"
+WSDOT,WSDOT_I5_MP210.71,1,0,0,0,1,41730.64433,2106.117188,185,"This is within 0.15 miles of MP210.85, with no exits in between, and a very similar amount of shoulder.  Why the difference in traffic and CO2?"
+WSDOT,WSDOT_I5_MP197.27,0,0,0,1,1,113040.6014,3656.068848,208,"traffic should be identical to that of MP197.35, as they are within 0.1 miles of each other with no exit.  Amount of shoulder could cause the variation"
+WSDOT,WSDOT_I5_MP197.35,0,0,0,0.891154769,1,111966.7857,3656.068848,214,this is fully paved; why not fully developed??
+WSDOT,WSDOT_I5_MP210.85,0.363340899,0,0,0,1,47387.03415,2924.760254,258,"This is within 0.15 miles of MP210.71, with no exits in between, and a very similar amount of shoulder.  Why the difference in traffic & CO2?  Also, it should be fully paved; why is it only partially developed?"
+MLK Street Sweep,MLK Street Sweep_SS3,0,0,0,1,0.836264543,22572.79817,2493.2771,350,
+MLK Street Sweep,MLK Street Sweep_SS5,0,0,0,1,0.414813944,20084.89164,3024.57373,577,This polygon is almost completely paved; it should have impervious_ground >= 0.85
+MLK Street Sweep,MLK Street Sweep_SS4,0,0,0,1,0.942678494,22580.33737,2493.2771,586,
+MLK Street Sweep,MLK Street Sweep_SS2,0,0,0,1,0.935912103,19541.34621,2493.2771,1387,
+Lake WA PFAS,LkWA_520-W,0,0,0,0,0,20669.62019,3547.846224,3904,"This polygon is completely on the 520 bridge, but has 0% paved.  Why?  "
+MasonCo,MasonCo_HS-033,0,0,0,1,0.58269257,435.9312532,215.5098877,4646,"includes part of hwy 101, and a large parking lot"
+GardenEd,GardenEd_W2,0,0.253301366,0.611727995,0,0.38519257,37.24042119,399.599762,8456,completely adjacent to GardenEd W1
+Coupeville,Coupeville_FrontAndMain,0,0,0,0.922631192,0.230620081,209.044048,54.99972204,8703,"one-block polygon bordered by two ""busy"" streets.  Why is traffic so high and CO_emissions_onroad so low?  Seems incongruous compared to other Coupeville polygons"
+GardenEd,GardenEd_W1,0.258675361,0.471075384,0.270249255,0,0.34249682,54.06791241,399.599762,9497,completely adjacent to GardenEd W2
+MasonCo,MasonCo_NB-020,0.001441068,0.006592759,0,0.63501566,0.21778388,314.8216852,372.708187,103538,"right next to highway 3, but does not include hwy 3"
+LahtiDr,LahtiDr_LahtiSwale,0.358830044,0.168447493,0.01013485,0.01506882,0.188160145,43.55164932,297.5594416,125130,"neighborhood with green swale running through it; values seem to correspond to those of GardenEd 1,2"
+Tacoma S8C,TacS8C_245,0.030052309,0,0,0.969947691,0.680924429,40.12236973,2753.664793,156968,"this polygon has by far the lowest Tacoma traffic.  However, its CO2 is high compared to Tacoma locations with MUCH higher traffic.  Why?"
+Tacoma S8C,TacS8C_243,0.023799555,0,0,0.976200445,0.821644273,2275.774976,2810.445731,237188,"There is a highway running through this polygon, and it is highly paved"
+I5 Bridge,I5 Bridge,0.042395522,0,0,0.957604478,0.710713356,100249.814,10126.42306,358425,
+Coupeville,Coupeville_BoatLaunch,0.279236849,0.021615665,0.0693538,0.492368713,0.200843235,19.63078685,220.6096523,363959,looks very similar to Coupeville Wharf on the map; similar size and both are mostly residential with approx the same number of roads.
+Coupeville,Coupeville_PerkinsBluff,0.108849114,0.017805928,0.016302206,0.143261761,0.081000025,12.87266233,89.01177811,438848,about 50% of this polygon is relatively undeveloped.
+Coupeville,Coupeville_CoupevilleWharf,0.132605276,0.09843127,0.042103637,0.501089845,0.224056779,90.47951697,287.888806,447087,"looks very similar to Coupeville Boat Launch.  Main Street marks the boundary of this polygon, and might explain the higher traffic level here.  "
+Tacoma S8C,TacS8C_254,0.112442758,0.001928945,0.011540934,0.864793019,0.549973385,182.3695785,1185.613033,481866,
+Tacoma S8C,TacS8C_235,0.06879151,6.61E-04,0,0.917583075,0.502066092,1689.576605,2484.126815,669158,
+Lake WA PFAS,LkWA_N.MER,0.099272231,0.00153791,0,0.639975918,0.218076845,2932.346456,3026.355141,886372,"lots of forest through this, but also some parking lots.  Has part of I-90 running through it, hence the high traffic?"
+Lake WA PFAS,LkWA_KIR-CW,0.292782257,0.007155354,0.005800099,0.558444069,0.193851141,1715.290286,3802.670064,912554,neighborhood next to a freeway (405)
+Tacoma S8C,TacS8C_230,0.026258137,0,5.16E-04,0.968177989,0.466618719,891.7376562,2192.464935,2235555,
+Lake WA PFAS,LkWA_REN-JC,0.043114173,0.001027504,0.00144715,0.853259714,0.328601891,2940.864996,4034.296008,3241180,neighborhood with 405 running through it.  Lots of paved area compared to other LkWA locations
+Tacoma S8C,TacS8C_237B,0.012777424,0.009734886,0.009796952,0.85813066,0.275498425,1433.102423,2355.650026,8032665,"this has lowest percent paved.  That seems in line with how the polygon looks, relative to others in Tacoma"
+Tacoma S8C,TacS8C_237A,0.023934607,0.001279431,0.004455887,0.906432282,0.378245555,2553.591409,4427.554713,11378785,
